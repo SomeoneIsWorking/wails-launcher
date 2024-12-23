@@ -1,10 +1,26 @@
-# Nuxt Minimal Starter
+# Nuxt Launcher
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+A web-based service launcher and log viewer built with Nuxt.js.
 
-## Setup
+## Features
 
-Make sure to install dependencies:
+- Launch and manage multiple services from a single interface
+- Real-time service status monitoring
+- Live log viewing with error tracking
+- WebSocket-based communication for instant updates
+- Track read/unread error logs
+- Persistent log read status
+
+## Technical Stack
+
+- [Nuxt.js](https://nuxt.com/)
+- [Pinia](https://pinia.vuejs.org/) for state management
+- [TailwindCSS](https://tailwindcss.com/) for styling
+- WebSocket for real-time updates
+
+## Development
+
+1. Install dependencies:
 
 ```bash
 # npm
@@ -20,9 +36,7 @@ yarn install
 bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+2. Start the development server on `http://localhost:3000`:
 
 ```bash
 # npm
@@ -35,7 +49,7 @@ pnpm dev
 yarn dev
 
 # bun
-bun run dev
+bun dev
 ```
 
 ## Production
