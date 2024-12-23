@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, exec } from "child_process";
+import { spawn, exec } from "child_process";
 import { promisify } from "util";
 import type { LogEntry } from "./types";
 import { Service } from "./Service";
