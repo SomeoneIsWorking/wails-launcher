@@ -8,5 +8,6 @@ export function mapToServiceInfo(service: Service): ServiceInfo {
     status: service.status,
     url: service.url,
     logs: service.logs,
+    env: service.env,
   };
 }

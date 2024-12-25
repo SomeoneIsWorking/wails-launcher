@@ -86,8 +86,7 @@ export class DotnetService {
 
   async startService(service: Service) {
     if (service.getProcess()) {
-      console.log(`Service ${service.name} is already running`);
-      return null;
+      throw new Error("Service is already running");
     }
 
     await this.cleanup(service.path);
@@ -101,7 +100,11 @@ export class DotnetService {
         cwd: service.path,
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, DOTNET_ENVIRONMENT: "Development" },
+        env: {
+          ...process.env,
+          DOTNET_ENVIRONMENT: "Development",
+          ...service.env,
+        },
       });
 
       if (!proc.pid) {

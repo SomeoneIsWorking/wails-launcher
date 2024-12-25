@@ -5,7 +5,8 @@
     "dictionaries": [],
     "words": [
         "dotnet",
-        "pinia"
+        "pinia",
+        "unref"
     ],
     "ignoreWords": [],
     "import": []

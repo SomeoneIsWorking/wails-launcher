@@ -1,4 +1,6 @@
+import { mapValues } from "lodash-es";
 import { defineStore } from "pinia";
+import type { ServiceConfig } from "~/server/Service";
 import type { ServiceInfo, WebSocketMessage } from "~/server/types";
 import type { ClientServiceInfo, ClientLogEntry } from "~/types/client";
 
@@ -8,23 +10,23 @@ function parseReadLogs(serviceName: string): Set<string> {
 }
 
 export const useServicesStore = defineStore("services", () => {
-  const services = ref<ClientServiceInfo[]>([]);
+  const services = ref<Record<string, ClientServiceInfo>>({});
   const selectedService = ref<ClientServiceInfo | null>(null);
   const ws = ref<WebSocket>();
   const readLogs = ref<Record<string, Set<string>>>({});
 
-  function isLogRead(serviceName: string, timestamp: string) {
-    if (!readLogs.value[serviceName]) {
-      readLogs.value[serviceName] = parseReadLogs(serviceName);
+  function isLogRead(id: string, timestamp: string) {
+    if (!readLogs.value[id]) {
+      readLogs.value[id] = parseReadLogs(id);
     }
-    return readLogs.value[serviceName].has(timestamp);
+    return readLogs.value[id].has(timestamp);
   }
 
-  function getUnreadErrorCount(serviceName: string) {
-    const service = services.value.find((s) => s.name === serviceName);
+  function getUnreadErrorCount(id: string) {
+    const service = services.value[id];
     if (!service) return 0;
     return service.logs.filter(
-      (log) => log.level === "ERR" && !isLogRead(serviceName, log.timestamp)
+      (log) => log.level === "ERR" && !isLogRead(id, log.timestamp)
     ).length;
   }
 
@@ -47,23 +49,38 @@ export const useServicesStore = defineStore("services", () => {
     };
   }
 
-  function addServices(newServices: ServiceInfo[]) {
-    services.value.push(...newServices.map(mapToClientServiceInfo));
+  function addServices(newServices: Record<string, ServiceInfo>) {
+    services.value = {
+      ...services.value,
+      ...mapValues(newServices, mapToClientServiceInfo),
+    };
   }
 
-  async function addService(path: string) {
-    const { service } = await $fetch<{
-      success: boolean;
-      service: ServiceInfo;
-    }>("/api/service/add", {
+  async function addService(config: ServiceConfig) {
+    const { id, service } = await $fetch("/api/services", {
       method: "POST",
-      body: { path },
+      body: config,
     });
+
     const clientService = mapToClientServiceInfo(service);
-    services.value.push(clientService);
+    services.value[id] = clientService;
     if (!selectedService.value) {
       selectedService.value = clientService;
     }
+  }
+
+  async function updateService(id: string, config: ServiceConfig) {
+    const { service } = await $fetch<{
+      service: ServiceInfo;
+    }>(`/api/services/${id}`, {
+      method: "PATCH",
+      body: config,
+    });
+
+    services.value[id] = {
+      ...service,
+      logs: services.value[id].logs,
+    };
   }
 
   function setupWebSocket() {
@@ -74,37 +91,20 @@ export const useServicesStore = defineStore("services", () => {
 
       switch (msg.type) {
         case "statusUpdate": {
-          const service = services.value.find(
-            (s) => s.name === msg.data.service
-          );
+          const service = services.value[msg.serviceId];
           if (service) {
             Object.assign(service, msg.data);
-            if (selectedService.value?.name === msg.data.service) {
-              selectedService.value = service as ClientServiceInfo;
-            }
           }
           break;
         }
         case "newLog": {
-          const service = services.value.find(
-            (s) => s.name === msg.data.service
-          );
+          const service = services.value[msg.serviceId];
           if (service) {
             const clientLog: ClientLogEntry = {
               ...msg.data.log,
               read: false,
             };
             service.logs.push(clientLog);
-          }
-          break;
-        }
-        case "initialState": {
-          services.value = msg.data.services.map((service) => ({
-            ...service,
-            logs: service.logs.map((log) => ({ ...log, read: false })),
-          }));
-          if (!selectedService.value && services.value.length > 0) {
-            selectedService.value = services.value[0];
           }
           break;
         }
@@ -117,16 +117,15 @@ export const useServicesStore = defineStore("services", () => {
     };
   }
 
-  async function startService(service: ClientServiceInfo) {
-    const serviceRef = services.value.find((s) => s.name === service.name);
+  async function startService(id: string) {
+    const serviceRef = services.value[id];
     if (serviceRef) {
       serviceRef.status = "starting";
     }
 
     try {
-      await $fetch("/api/service/start", {
+      await $fetch(`/api/services/${id}/start`, {
         method: "POST",
-        body: { service: service.path },
       });
     } catch (error) {
       if (serviceRef) {
@@ -136,21 +135,19 @@ export const useServicesStore = defineStore("services", () => {
     }
   }
 
-  async function stopService(service: ClientServiceInfo) {
-    const serviceRef = services.value.find((s) => s.name === service.name);
-    if (serviceRef) {
-      serviceRef.status = "stopping";
+  async function stopService(id: string) {
+    const serviceRef = services.value[id];
+    if (!serviceRef) {
+      throw new Error(`Service ${id} not found`);
     }
+    serviceRef.status = "stopping";
 
     try {
-      await $fetch("/api/service/stop", {
+      await $fetch(`/api/services/${id}/stop`, {
         method: "POST",
-        body: { service: service.path },
       });
     } catch (error) {
-      if (serviceRef) {
-        serviceRef.status = "error";
-      }
+      serviceRef.status = "error";
       console.error("Failed to stop service:", error);
     }
   }
@@ -174,5 +171,6 @@ export const useServicesStore = defineStore("services", () => {
     markLogAsRead,
     getUnreadErrorCount,
     addService,
+    updateService,
   };
 });

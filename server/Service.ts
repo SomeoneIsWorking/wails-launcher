@@ -1,23 +1,35 @@
 import { ChildProcess } from "child_process";
 import type { LogEntry, ServiceStatus } from "./types";
 import { broadcast } from "./api/socket";
-import { sep } from "path";
 import { readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "crypto";
+import { mapValues } from "lodash-es";
+
+export interface ServiceConfig {
+  name: string;
+  path: string;
+  env: Record<string, string>;
+}
 
 export class Service {
+  id: string;
   name: string;
   status: ServiceStatus = "stopped";
   logs: LogEntry[] = [];
   url?: string;
+  env: Record<string, string>;
+  path: string;
   private process?: ChildProcess;
 
-  constructor(public path: string) {
-    this.name = path.split(sep).pop()!;
+  constructor(id: string, config: ServiceConfig) {
+    this.id = id;
+    this.name = config.name;
+    this.path = config.path;
+    this.env = config.env;
   }
 
   private broadcastStatus() {
-    broadcast("statusUpdate", {
-      service: this.name,
+    broadcast("statusUpdate", this.id, {
       status: this.status,
       url: this.url,
     });
@@ -45,8 +57,7 @@ export class Service {
 
     this.logs.push(log);
 
-    broadcast("newLog", {
-      service: this.name,
+    broadcast("newLog", this.id, {
       log,
     });
 
@@ -73,31 +84,64 @@ export class Service {
       logs: [],
     });
   }
+
+  toConfig(): ServiceConfig {
+    return {
+      name: this.name,
+      path: this.path,
+      env: this.env,
+    };
+  }
 }
 
-export const loadServicePaths = () => {
+export const loadServices = () => {
   try {
-    return JSON.parse(readFileSync("services.json", "utf-8")) as string[];
+    const configs = JSON.parse(
+      readFileSync("services.json", "utf-8")
+    ) as Record<string, ServiceConfig>;
+    return mapValues(configs, (config, id) => new Service(id, config));
   } catch {
-    return [] as string[];
+    return {};
   }
 };
 
-export const saveServicePaths = (paths: string[]) => {
-  writeFileSync("services.json", JSON.stringify(paths, null, 2));
+export const saveServices = (services: Record<string, Service>) => {
+  const configs = mapValues(services, (service) => service.toConfig());
+  writeFileSync("services.json", JSON.stringify(configs, null, 2));
 };
 
-export const services = new Map<string, Service>(
-  loadServicePaths().map((path) => {
-    return [path, new Service(path)];
-  })
-);
+export const services = loadServices();
 
-export const addService = (filepath: string) => {
-  const service = new Service(filepath);
-  services.set(filepath, service);
-  const paths = loadServicePaths();
-  paths.push(filepath);
-  saveServicePaths(paths);
+export const addService = (config: ServiceConfig) => {
+  const id = randomUUID();
+  const service = new Service(id, {
+    name: config.name,
+    path: config.path,
+    env: config.env || {},
+  });
+  services[id] = service;
+  saveServices(services);
+  return service;
+};
+
+export const updateService = (id: string, config: ServiceConfig) => {
+  const service = services[id];
+  if (!service) {
+    throw new Error("Service not found");
+  }
+
+  Object.assign(service, config);
+  saveServices(services);
+  return service;
+};
+
+export const editService = (id: string, config: Partial<ServiceConfig>) => {
+  const service = services[id];
+  if (!service) {
+    throw new Error("Service not found");
+  }
+
+  Object.assign(service, config);
+  saveServices(services);
   return service;
 };

@@ -2,12 +2,14 @@
   <div class="w-64 bg-gray-100 overflow-y-auto flex flex-col h-full">
     <div class="flex-1 overflow-y-auto">
       <div
-        v-for="service in services"
-        :key="service.name"
+        v-for="(service, id) in services"
+        :key="id"
         @click="store.selectService(service)"
         :class="[
           'p-4',
-          selectedService === service ? 'bg-blue-300' : 'hover:bg-blue-200 cursor-pointer',
+          selectedService === service
+            ? 'bg-blue-300'
+            : 'hover:bg-blue-200 cursor-pointer',
         ]"
       >
         <div class="flex items-center justify-between mb-2">
@@ -15,6 +17,12 @@
             {{ service.name }}
           </span>
           <div class="flex items-center gap-2">
+            <button
+              @click.stop="editService(id)"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              <SettingsIcon :size="16" />
+            </button>
             <div
               :class="['w-3 h-3 rounded-full', statusColor(service.status)]"
             ></div>
@@ -38,7 +46,7 @@
 
         <div class="flex gap-2">
           <button
-            @click="store.startService(service)"
+            @click="store.startService(id)"
             :disabled="
               service.status === 'running' ||
               service.status === 'starting' ||
@@ -49,7 +57,7 @@
             {{ service.status === "starting" ? "..." : "Start" }}
           </button>
           <button
-            @click="store.stopService(service)"
+            @click="store.stopService(id)"
             :disabled="
               service.status === 'stopped' ||
               service.status === 'starting' ||
@@ -62,53 +70,38 @@
         </div>
       </div>
     </div>
-    
+
     <div class="p-4 border-t">
       <button
-        @click="showDialog = true"
+        @click="editingServiceId = 'new'"
         class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
       >
         Add Service
       </button>
     </div>
 
-    <!-- Dialog -->
-    <div v-if="showDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white p-6 rounded-lg shadow-lg w-96">
-        <h3 class="text-lg font-medium mb-4">Add New Service</h3>
-        <input
-          v-model="servicePath"
-          type="text"
-          placeholder="Enter service path"
-          class="w-full px-3 py-2 border rounded mb-4"
-          @keyup.enter="addService"
-        />
-        <div class="flex justify-end gap-2">
-          <button
-            @click="showDialog = false"
-            class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-          >
-            Cancel
-          </button>
-          <button
-            @click="addService"
-            class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Add
-          </button>
-        </div>
-      </div>
+    <!-- Config Dialog -->
+    <div
+      v-if="editingServiceId"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <ServiceConfig
+        :service-id="editingServiceId"
+        @close="editingServiceId = undefined"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { storeToRefs } from 'pinia';
-import { useServicesStore } from '~/stores/services'
-import { ref } from 'vue'
+import { storeToRefs } from "pinia";
+import { useServicesStore } from "~/stores/services";
+import { ref } from "vue";
+import { SettingsIcon } from "lucide-vue-next";
+import type { ServiceConfig } from "~/server/Service";
 
-const store = useServicesStore()
-const { services, selectedService } = storeToRefs(store)
+const store = useServicesStore();
+const { services, selectedService } = storeToRefs(store);
 
 const statusColor = (status: string) =>
   ({
@@ -124,18 +117,9 @@ function formatUrl(url: string): string {
   return url.replace(/^https?:\/\//, "");
 }
 
-const showDialog = ref(false)
-const servicePath = ref('')
+const editingServiceId = ref<string>();
 
-async function addService() {
-  if (!servicePath.value) return
-  
-  try {
-    await store.addService(servicePath.value)
-    servicePath.value = '' // Clear input
-    showDialog.value = false // Close dialog
-  } catch (error) {
-    console.error('Failed to add service:', error)
-  }
+function editService(id: string) {
+  editingServiceId.value = id;
 }
 </script>

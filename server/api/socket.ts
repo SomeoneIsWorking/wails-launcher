@@ -1,12 +1,12 @@
 import { WebSocketServer } from "ws";
-import type { LogType, LogOptions } from "../types";
+import type { LogType, WebSocketEventData } from "../types";
 
 const socket = new WebSocketServer({ noServer: true });
 
-export function broadcast<T extends LogType>(type: T, data: LogOptions[T]) {
+export function broadcast<T extends LogType>(type: T, serviceId: string, data: WebSocketEventData[T]) {
   for (const client of socket.clients) {
     if (client.readyState === client.OPEN) {
-      client.send(JSON.stringify({ type, data }));
+      client.send(JSON.stringify({ type, serviceId, data }));
     }
   }
 }
