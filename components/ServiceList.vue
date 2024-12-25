@@ -4,7 +4,7 @@
       <div
         v-for="(service, id) in services"
         :key="id"
-        @click="store.selectService(service)"
+        @click="store.selectService(id)"
         :class="[
           'p-4',
           selectedService === service

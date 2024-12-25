@@ -11,7 +11,10 @@ function parseReadLogs(serviceName: string): Set<string> {
 
 export const useServicesStore = defineStore("services", () => {
   const services = ref<Record<string, ClientServiceInfo>>({});
-  const selectedService = ref<ClientServiceInfo | null>(null);
+  const selectedServiceId = ref<string | null>(null);
+  const selectedService = computed(() =>
+    selectedServiceId.value ? services.value[selectedServiceId.value] : null
+  );
   const ws = ref<WebSocket>();
   const readLogs = ref<Record<string, Set<string>>>({});
 
@@ -65,7 +68,7 @@ export const useServicesStore = defineStore("services", () => {
     const clientService = mapToClientServiceInfo(service);
     services.value[id] = clientService;
     if (!selectedService.value) {
-      selectedService.value = clientService;
+      selectService(id);
     }
   }
 
@@ -152,8 +155,11 @@ export const useServicesStore = defineStore("services", () => {
     }
   }
 
-  function selectService(service: ClientServiceInfo) {
-    selectedService.value = service;
+  function selectService(id: string) {
+    if (!services.value[id]) {
+      throw new Error(`Service ${id} not found`);
+    }
+    selectedServiceId.value = id;
   }
 
   onMounted(() => {
