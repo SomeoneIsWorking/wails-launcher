@@ -1,3 +1,5 @@
+import type { Service } from "./Service";
+
 export type LogLevel = "ERR" | "INF" | "WARN" | "DBG";
 export type ServiceStatus =
   | "stopped"
@@ -41,3 +43,10 @@ export type WebSocketMessage = {
     serviceId: string;
   };
 }[LogType];
+
+export interface IProcessManager {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  on(event: 'log' | 'url' | 'statusChange', callback: (data: any) => void): void;
+  off(event: 'log' | 'url' | 'statusChange', callback: (data: any) => void): void;
+}

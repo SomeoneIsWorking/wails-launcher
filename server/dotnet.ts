@@ -1,14 +1,21 @@
-import { spawn, exec } from "child_process";
+import { spawn, exec, type ChildProcess } from "child_process";
 import { promisify } from "util";
-import type { LogEntry } from "./types";
+import { EventEmitter } from "events";
+import type { IProcessManager, LogEntry } from "./types";
 import { Service } from "./Service";
 
 const execAsync = promisify(exec);
 
-export class DotnetService {
-  async findProcess(
-    servicePath: string
-  ): Promise<{ pid: string; cmd: string }[]> {
+export class DotnetService extends EventEmitter implements IProcessManager {
+  private currentProcess?: ChildProcess;
+  private service: Service;
+
+  constructor(service: Service) {
+    super();
+    this.service = service;
+  }
+
+  async findProcess() {
     try {
       // Find all dotnet processes and their working directories in one command
       const { stdout } = await execAsync(`lsof -c dotnet -a -d cwd | grep cwd`);
@@ -16,14 +23,16 @@ export class DotnetService {
       const results: { pid: string; cmd: string }[] = [];
 
       stdout.split("\n").forEach((line) => {
-        if (!line.trim()) return;
+        if (!line.trim()) {
+          return;
+        }
         const [_, pid, __, ___, ____, _____, ______, _______, path] = line
           .trim()
           .split(/\s+/);
-        if (path.toLowerCase().includes(servicePath.toLowerCase())) {
+        if (path.toLowerCase().includes(this.service.path.toLowerCase())) {
           results.push({
             pid,
-            cmd: servicePath,
+            cmd: this.service.path,
           });
         }
       });
@@ -33,7 +42,7 @@ export class DotnetService {
       if (error.code === 1 && !error.stdout && !error.stderr) {
         return [];
       }
-      console.error(`Process search error for ${servicePath}:`, error);
+      console.error(`Process search error for ${this.service.path}:`, error);
       return [];
     }
   }
@@ -54,8 +63,8 @@ export class DotnetService {
     }
   }
 
-  async cleanup(servicePath: string) {
-    const runningProcesses = await this.findProcess(servicePath);
+  async cleanup() {
+    const runningProcesses = await this.findProcess();
 
     for (const proc of runningProcesses) {
       console.log(`Killing process ${proc.pid} (${proc.cmd})`);
@@ -84,36 +93,39 @@ export class DotnetService {
     };
   }
 
-  async startService(service: Service) {
-    if (service.getProcess()) {
+  async start() {
+    if (this.currentProcess) {
       throw new Error("Service is already running");
     }
 
-    await this.cleanup(service.path);
-    service.update({
-      logs: [],
-      status: "starting",
-    });
+    await this.cleanup();
+    this.emit("statusChange", "starting");
 
     try {
       const proc = spawn("dotnet", ["run"], {
-        cwd: service.path,
+        cwd: this.service.path,
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
           DOTNET_ENVIRONMENT: "Development",
-          ...service.env,
+          ...this.service.env,
         },
       });
 
+      console.log(
+        `Started service ${this.service.path} with PID ${
+          proc.pid
+        } + env: ${JSON.stringify(this.service.env)}`
+      );
+
       if (!proc.pid) {
-        service.setStatus("error");
-        return null;
+        this.emit("statusChange", "error");
+        return;
       }
 
-      service.setProcess(proc);
-      service.setStatus("initializing");
+      this.currentProcess = proc;
+      this.emit("statusChange", "initializing");
 
       proc.stdout.on("data", (data) => {
         const output = data.toString().trim();
@@ -121,17 +133,17 @@ export class DotnetService {
 
         const urlMatch = output.match(/Now listening on:\s*(\S+)/i);
         if (urlMatch) {
-          service.setUrl(urlMatch[1]);
+          this.emit("url", urlMatch[1]);
         }
 
         const log = this.parseLog(output);
         if (log) {
-          service.addLog(log);
+          this.emit("log", log);
         }
       });
 
       proc.stderr.on("data", (data) => {
-        service.addLog({
+        this.emit("log", {
           timestamp: new Date().toISOString(),
           level: "ERR",
           message: data.toString(),
@@ -140,34 +152,28 @@ export class DotnetService {
       });
 
       proc.on("close", (code) => {
-        service.setProcess(undefined);
-        service.setStatus(code === 0 ? "stopped" : "error");
+        this.currentProcess = undefined;
+        this.emit("statusChange", code === 0 ? "stopped" : "error");
       });
-
-      return proc;
     } catch (error) {
-      console.error(`Error starting service ${service.name}:`, error);
-      service.setStatus("error");
-      return null;
+      console.error(`Error starting service:`, error);
+      this.emit("statusChange", "error");
     }
   }
 
-  async stopService(service: Service) {
-    service.setStatus("stopping");
+  async stop() {
+    this.emit("statusChange", "stopping");
 
-    const proc = service.getProcess();
-    if (proc) {
-      proc.kill("SIGTERM");
+    if (this.currentProcess) {
+      this.currentProcess.kill("SIGTERM");
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (!proc.killed) {
-        proc.kill("SIGKILL");
+      if (!this.currentProcess.killed) {
+        this.currentProcess.kill("SIGKILL");
       }
-      service.setProcess(undefined);
+      this.currentProcess = undefined;
     }
 
-    await this.cleanup(service.path);
-    service.setStatus("stopped");
+    await this.cleanup();
+    this.emit("statusChange", "stopped");
   }
 }
-
-export const dotnetService = new DotnetService();

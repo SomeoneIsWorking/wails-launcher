@@ -166,6 +166,13 @@ export const useServicesStore = defineStore("services", () => {
     setupWebSocket();
   });
 
+  async function clearLogs(id: string) {
+    await $fetch(`/api/services/${id}/clear-logs`, {
+      method: "POST",
+    });
+    services.value[id].logs = [];
+  }
+
   return {
     services,
     selectedService,
@@ -178,5 +185,6 @@ export const useServicesStore = defineStore("services", () => {
     getUnreadErrorCount,
     addService,
     updateService,
+    clearLogs
   };
 });

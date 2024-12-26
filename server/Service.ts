@@ -1,9 +1,10 @@
 import { ChildProcess } from "child_process";
-import type { LogEntry, ServiceStatus } from "./types";
+import type { IProcessManager, LogEntry, ServiceStatus } from "./types";
 import { broadcast } from "./api/socket";
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "crypto";
 import { mapValues } from "lodash-es";
+import { DotnetService } from "./dotnet";
 
 export interface ServiceConfig {
   name: string;
@@ -19,7 +20,7 @@ export class Service {
   url?: string;
   env: Record<string, string>;
   path: string;
-  private process?: ChildProcess;
+  private processManager?: IProcessManager;
 
   constructor(id: string, config: ServiceConfig) {
     this.id = id;
@@ -35,19 +36,14 @@ export class Service {
     });
   }
 
-  update(
-    updates: Partial<{
-      status: ServiceStatus;
-      logs: LogEntry[];
-      url: string;
-    }>
-  ) {
-    Object.assign(this, updates);
+  setStatus(status: ServiceStatus) {
+    this.status = status;
     this.broadcastStatus();
   }
 
-  setStatus(status: ServiceStatus) {
-    this.update({ status });
+  clearLogs() {
+    this.logs = [];
+    this.broadcastStatus();
   }
 
   addLog(log: LogEntry) {
@@ -71,18 +67,48 @@ export class Service {
     this.broadcastStatus();
   }
 
-  setProcess(proc: ChildProcess | undefined) {
-    this.process = proc;
+  setProcessManager(manager: IProcessManager) {
+    if (this.processManager) {
+      // Cleanup old listeners
+      this.processManager.off("log", this.handleLog);
+      this.processManager.off("url", this.handleUrl);
+      this.processManager.off("statusChange", this.handleStatus);
+    }
+
+    this.processManager = manager;
+
+    // Set up new listeners
   }
 
-  getProcess() {
-    return this.process;
+  private handleLog = (log: LogEntry) => {
+    this.addLog(log);
+  };
+
+  private handleUrl = (url: string) => {
+    this.setUrl(url);
+  };
+
+  private handleStatus = (status: ServiceStatus) => {
+    this.setStatus(status);
+  };
+
+  public start() {
+    return this.getProcessManager().start();
   }
 
-  clearLogs() {
-    this.update({
-      logs: [],
-    });
+  public stop() {
+    return this.getProcessManager().stop();
+  }
+
+  getProcessManager() {
+    if (!this.processManager) {
+      this.processManager = new DotnetService(this);
+      this.processManager.on("log", this.handleLog);
+      this.processManager.on("url", this.handleUrl);
+      this.processManager.on("statusChange", this.handleStatus);
+    }
+
+    return this.processManager;
   }
 
   toConfig(): ServiceConfig {

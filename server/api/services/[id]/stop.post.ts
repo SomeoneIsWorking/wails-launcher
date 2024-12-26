@@ -1,6 +1,4 @@
 import { services } from "~/server/Service";
-import { dotnetService } from "~/server/dotnet";
-import { mapToServiceInfo } from "../../../utils/serviceMapper";
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, "id");
@@ -11,6 +9,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: "Service not found" });
   }
 
-  await dotnetService.stopService(service);
-  return { service: mapToServiceInfo(service) };
+  service.stop();
 });

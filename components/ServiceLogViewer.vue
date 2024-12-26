@@ -3,6 +3,10 @@
     <div
       class="absolute top-4 right-4 flex items-stretch bg-gray-800/90 rounded-full shadow-lg backdrop-blur-sm text-sm text-gray-300"
     >
+      <button @click="clearLogs" class="px-5 py-2 hover:text-white">
+        Clear Logs
+      </button>
+      <span class="inline-block w-0.5 flex-grow bg-gray-500"></span>
       <div class="px-5 flex items-center">
         Error {{ currentOrPreviousErrorIndex + 1 }} of {{ errors.length }}
       </div>
@@ -52,19 +56,19 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted } from "vue";
-import type { ClientServiceInfo } from "~/types/client";
 import { ChevronUp, ChevronDown } from "lucide-vue-next";
 
 const props = defineProps<{
-  service: ClientServiceInfo;
+  serviceId: string;
 }>();
-
+const store = useServicesStore();
+const service = computed(() => store.services[props.serviceId]);
 const logContainer = ref<HTMLElement | null>(null);
 const isScrolledToBottom = ref(true);
 const currentOrPreviousErrorIndex = ref(-1);
 
 const errors = computed(() =>
-  props.service.logs
+  service.value.logs
     .map((log, index) => ({ ...log, elementIndex: index }))
     .filter(({ level }) => level === "ERR")
     .map((log) => ({
@@ -131,16 +135,16 @@ const navigateError = (item: ErrorLog | undefined) => {
   });
 };
 
-watch(
-  () => props.service.logs,
-  () => {
-    handleScroll();
-    if (isScrolledToBottom.value) {
-      nextTick(scrollToBottom);
-    }
-  },
-  { deep: true }
-);
+const clearLogs = async () => {
+  await store.clearLogs(props.serviceId);
+};
+
+watchEffect(() => {
+  handleScroll();
+  if (isScrolledToBottom.value) {
+    nextTick(scrollToBottom);
+  }
+});
 </script>
 
 <style scoped lang="postcss">
