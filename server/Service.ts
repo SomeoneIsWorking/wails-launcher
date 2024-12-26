@@ -1,4 +1,3 @@
-import { ChildProcess } from "child_process";
 import type { IProcessManager, LogEntry, ServiceStatus } from "./types";
 import { broadcast } from "./api/socket";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -120,15 +119,46 @@ export class Service {
   }
 }
 
-export const loadServices = () => {
+export const loadConfigs = () => {
   try {
-    const configs = JSON.parse(
-      readFileSync("services.json", "utf-8")
-    ) as Record<string, ServiceConfig>;
-    return mapValues(configs, (config, id) => new Service(id, config));
+    return JSON.parse(readFileSync("services.json", "utf-8")) as Record<
+      string,
+      ServiceConfig
+    >;
   } catch {
     return {};
   }
+};
+
+export const reloadServices = async () => {
+  const configs = loadConfigs();
+
+  // Stop and remove services that no longer exist in config
+  for (const id of Object.keys(services)) {
+    if (!configs[id]) {
+      const service = services[id];
+      if (service.status === "running") {
+        await service.stop();
+      }
+      delete services[id];
+    }
+  }
+
+  // Update existing services and create new ones
+  for (const [id, config] of Object.entries(configs)) {
+    if (services[id]) {
+      const service = services[id];
+
+      service.name = config.name;
+      service.path = config.path;
+      service.env = config.env || {};
+    } else {
+      // Create new service
+      services[id] = new Service(id, config);
+    }
+  }
+
+  return services;
 };
 
 export const saveServices = (services: Record<string, Service>) => {
@@ -136,7 +166,11 @@ export const saveServices = (services: Record<string, Service>) => {
   writeFileSync("services.json", JSON.stringify(configs, null, 2));
 };
 
-export const services = loadServices();
+const configs = loadConfigs();
+export const services = mapValues(
+  configs,
+  (config, id) => new Service(id, config)
+);
 
 export const addService = (config: ServiceConfig) => {
   const id = randomUUID();

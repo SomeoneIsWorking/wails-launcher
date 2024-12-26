@@ -5,7 +5,6 @@ export interface ClientLogEntry extends ServerLogEntry {
 }
 
 export interface ClientServiceInfo extends Omit<ServerServiceInfo, 'logs'> {
-  id: string;
   logs: ClientLogEntry[];
   unreadErrors?: number;
 }

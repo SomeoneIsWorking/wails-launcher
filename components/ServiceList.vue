@@ -71,12 +71,19 @@
       </div>
     </div>
 
-    <div class="p-4 border-t">
+    <div class="p-4 border-t flex gap-2">
       <button
         @click="editingServiceId = 'new'"
-        class="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
       >
         Add Service
+      </button>
+      <button
+        @click="store.reloadConfig"
+        class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+        title="Reload config from services.json"
+      >
+        <RefreshCwIcon :size="16" />
       </button>
     </div>
 
@@ -97,8 +104,7 @@
 import { storeToRefs } from "pinia";
 import { useServicesStore } from "~/stores/services";
 import { ref } from "vue";
-import { SettingsIcon } from "lucide-vue-next";
-import type { ServiceConfig } from "~/server/Service";
+import { SettingsIcon, RefreshCwIcon } from "lucide-vue-next";
 
 const store = useServicesStore();
 const { services, selectedService } = storeToRefs(store);

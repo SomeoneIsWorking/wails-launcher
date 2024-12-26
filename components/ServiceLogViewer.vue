@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onMounted } from "vue";
+import { ref, nextTick, computed, onMounted } from "vue";
 import { ChevronUp, ChevronDown } from "lucide-vue-next";
 
 const props = defineProps<{

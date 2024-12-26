@@ -173,6 +173,13 @@ export const useServicesStore = defineStore("services", () => {
     services.value[id].logs = [];
   }
 
+  async function reloadConfig() {
+    const reloadedServices = await $fetch("/api/services/reload", {
+      method: "POST",
+    });
+    addServices(reloadedServices);
+  }
+
   return {
     services,
     selectedService,
@@ -185,6 +192,7 @@ export const useServicesStore = defineStore("services", () => {
     getUnreadErrorCount,
     addService,
     updateService,
-    clearLogs
+    clearLogs,
+    reloadConfig
   };
 });
