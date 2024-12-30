@@ -50,7 +50,8 @@
             :disabled="
               service.status === 'running' ||
               service.status === 'starting' ||
-              service.status === 'stopping'
+              service.status === 'stopping' ||
+              service.status === 'initializing'
             "
             class="px-2 py-1 text-sm bg-green-500 text-white rounded disabled:opacity-50 min-w-[60px]"
           >

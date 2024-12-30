@@ -1,4 +1,4 @@
-import { MAX_LOGS } from '../constants';
+import { MAX_LOGS } from "../constants";
 import type { IProcessManager, LogEntry, ServiceStatus } from "./types";
 import { broadcast } from "./api/socket";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -14,19 +14,19 @@ export interface ServiceConfig {
 
 export class Service {
   id: string;
-  name: string;
+  config: ServiceConfig;
   status: ServiceStatus = "stopped";
   logs: LogEntry[] = [];
   url?: string;
-  env: Record<string, string>;
-  path: string;
-  private processManager?: IProcessManager;
+  private processManager: IProcessManager;
 
   constructor(id: string, config: ServiceConfig) {
     this.id = id;
-    this.name = config.name;
-    this.path = config.path;
-    this.env = config.env;
+    this.config = config;
+    this.processManager = new DotnetService(config.path, config.env);
+    this.processManager.on("log", this.handleLog);
+    this.processManager.on("url", this.handleUrl);
+    this.processManager.on("statusChange", this.handleStatus);
   }
 
   private broadcastStatus() {
@@ -70,19 +70,6 @@ export class Service {
     this.broadcastStatus();
   }
 
-  setProcessManager(manager: IProcessManager) {
-    if (this.processManager) {
-      // Cleanup old listeners
-      this.processManager.off("log", this.handleLog);
-      this.processManager.off("url", this.handleUrl);
-      this.processManager.off("statusChange", this.handleStatus);
-    }
-
-    this.processManager = manager;
-
-    // Set up new listeners
-  }
-
   private handleLog = (log: LogEntry) => {
     this.addLog(log);
   };
@@ -96,30 +83,11 @@ export class Service {
   };
 
   public start() {
-    return this.getProcessManager().start();
+    return this.processManager.start();
   }
 
   public stop() {
-    return this.getProcessManager().stop();
-  }
-
-  getProcessManager() {
-    if (!this.processManager) {
-      this.processManager = new DotnetService(this);
-      this.processManager.on("log", this.handleLog);
-      this.processManager.on("url", this.handleUrl);
-      this.processManager.on("statusChange", this.handleStatus);
-    }
-
-    return this.processManager;
-  }
-
-  toConfig(): ServiceConfig {
-    return {
-      name: this.name,
-      path: this.path,
-      env: this.env,
-    };
+    return this.processManager.stop();
   }
 }
 
@@ -152,10 +120,7 @@ export const reloadServices = async () => {
   for (const [id, config] of Object.entries(configs)) {
     if (services[id]) {
       const service = services[id];
-
-      service.name = config.name;
-      service.path = config.path;
-      service.env = config.env || {};
+      service.config = config;
     } else {
       // Create new service
       services[id] = new Service(id, config);
@@ -166,7 +131,7 @@ export const reloadServices = async () => {
 };
 
 export const saveServices = (services: Record<string, Service>) => {
-  const configs = mapValues(services, (service) => service.toConfig());
+  const configs = mapValues(services, (service) => service.config);
   writeFileSync("services.json", JSON.stringify(configs, null, 2));
 };
 
@@ -194,7 +159,7 @@ export const updateService = (id: string, config: ServiceConfig) => {
     throw new Error("Service not found");
   }
 
-  Object.assign(service, config);
+  service.config = config;
   saveServices(services);
   return service;
 };
@@ -205,7 +170,7 @@ export const editService = (id: string, config: Partial<ServiceConfig>) => {
     throw new Error("Service not found");
   }
 
-  Object.assign(service, config);
+  Object.assign(service.config, config);
   saveServices(services);
   return service;
 };

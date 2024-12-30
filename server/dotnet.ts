@@ -1,18 +1,39 @@
 import { spawn, exec, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
-import type { IProcessManager, LogEntry } from "./types";
-import { Service } from "./Service";
+import type { IProcessManager, LogEntry, LogLevel } from "./types";
 
 const execAsync = promisify(exec);
 
 export class DotnetService extends EventEmitter implements IProcessManager {
   private currentProcess?: ChildProcess;
-  private service: Service;
+  private path: string;
+  private env: Record<string, string>;
 
-  constructor(service: Service) {
+  constructor(path: string, env: Record<string, string>) {
     super();
-    this.service = service;
+    this.path = path;
+    this.env = env;
+  }
+
+  private emitLog(level: LogLevel, message: string, raw?: string) {
+    this.emit("log", {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      raw: raw || message,
+    });
+  }
+
+  private emitError(error: Error | string, context?: string) {
+    const message = error instanceof Error ? error.message : error;
+    const raw = error instanceof Error ? error.toString() : error;
+    this.emitLog("ERR", context ? `${context}: ${message}` : message, raw);
+  }
+
+  private emitStateChange(status: string) {
+    this.emit("statusChange", status);
+    this.emitLog("INF", `Service ${status}`);
   }
 
   async findProcess() {
@@ -29,10 +50,10 @@ export class DotnetService extends EventEmitter implements IProcessManager {
         const [_, pid, __, ___, ____, _____, ______, _______, path] = line
           .trim()
           .split(/\s+/);
-        if (path.toLowerCase().includes(this.service.path.toLowerCase())) {
+        if (path.toLowerCase().includes(this.path.toLowerCase())) {
           results.push({
             pid,
-            cmd: this.service.path,
+            cmd: this.path,
           });
         }
       });
@@ -42,7 +63,8 @@ export class DotnetService extends EventEmitter implements IProcessManager {
       if (error.code === 1 && !error.stdout && !error.stderr) {
         return [];
       }
-      console.error(`Process search error for ${this.service.path}:`, error);
+      console.error(`Process search error for ${this.path}:`, error);
+      this.emitError(error, "Process search error");
       return [];
     }
   }
@@ -58,8 +80,9 @@ export class DotnetService extends EventEmitter implements IProcessManager {
       } catch {
         console.log(`Process ${pid} terminated gracefully`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error killing process ${pid}:`, error);
+      this.emitError(error, `Failed to kill process ${pid}`);
     }
   }
 
@@ -95,85 +118,94 @@ export class DotnetService extends EventEmitter implements IProcessManager {
 
   async start() {
     if (this.currentProcess) {
-      throw new Error("Service is already running");
+      const error = new Error("Service is already running");
+      this.emitError(error);
+      throw error;
     }
 
     await this.cleanup();
-    this.emit("statusChange", "starting");
+    this.emitStateChange("starting");
 
     try {
-      const proc = spawn("dotnet", ["run"], {
-        cwd: this.service.path,
+      const proc = this.spawn();
+      this.checkPid(proc);
+      this.currentProcess = proc;
+      this.emitStateChange("initializing");
+      proc.stdout.on("data", (data) => this.onData(data));
+      proc.stderr.on("data", (data) => this.onErrorData(data));
+      proc.on("close", (code) => this.onClose(code));
+    } catch (error: any) {
+      console.error(`Error starting service:`, error);
+      this.emitStateChange("error");
+      this.emitError(error, "Failed to start service");
+    }
+  }
+
+  private spawn() {
+    try {
+      return spawn("dotnet", ["run"], {
+        cwd: this.path,
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
           DOTNET_ENVIRONMENT: "Development",
-          ...this.service.env,
+          ...this.env,
         },
       });
-
-      console.log(
-        `Started service ${this.service.path} with PID ${
-          proc.pid
-        } + env: ${JSON.stringify(this.service.env)}`
-      );
-
-      if (!proc.pid) {
-        this.emit("statusChange", "error");
-        return;
-      }
-
-      this.currentProcess = proc;
-      this.emit("statusChange", "initializing");
-
-      proc.stdout.on("data", (data) => {
-        const output = data.toString().trim();
-        if (!output) return;
-
-        const urlMatch = output.match(/Now listening on:\s*(\S+)/i);
-        if (urlMatch) {
-          this.emit("url", urlMatch[1]);
-        }
-
-        const log = this.parseLog(output);
-        if (log) {
-          this.emit("log", log);
-        }
-      });
-
-      proc.stderr.on("data", (data) => {
-        this.emit("log", {
-          timestamp: new Date().toISOString(),
-          level: "ERR",
-          message: data.toString(),
-          raw: data.toString(),
-        });
-      });
-
-      proc.on("close", (code) => {
-        this.currentProcess = undefined;
-        this.emit("statusChange", code === 0 ? "stopped" : "error");
-      });
-    } catch (error) {
-      console.error(`Error starting service:`, error);
-      this.emit("statusChange", "error");
+    } catch (error: any) {
+      this.emitStateChange("error");
+      this.emitError(error, "Failed to start service");
+      throw error;
     }
   }
 
-  async stop() {
-    this.emit("statusChange", "stopping");
+  private checkPid(proc: ChildProcess) {
+    if (!proc.pid) {
+      this.emitStateChange("error");
+      this.emitError("Failed to start process - no PID assigned");
+      throw new Error("Failed to start process - no PID assigned");
+    }
+  }
 
-    if (this.currentProcess) {
-      this.currentProcess.kill("SIGTERM");
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (!this.currentProcess.killed) {
-        this.currentProcess.kill("SIGKILL");
-      }
-      this.currentProcess = undefined;
+  onData(data: any) {
+    const output = data.toString().trim();
+    if (!output) return;
+
+    const urlMatch = output.match(/Now listening on:\s*(\S+)/i);
+    if (urlMatch) {
+      this.emit("url", urlMatch[1]);
     }
 
-    await this.cleanup();
-    this.emit("statusChange", "stopped");
+    const log = this.parseLog(output);
+    if (log) {
+      this.emit("log", log);
+    }
+  }
+
+  private onErrorData(data: any) {
+    this.emitLog("ERR", data.toString());
+  }
+
+  private onClose(code: number | null) {
+    this.currentProcess = undefined;
+    const status = code === 0 ? "stopped" : "error";
+    this.emitStateChange(status);
+    this.emitLog(
+      status === "error" ? "ERR" : "INF",
+      `Service ${status}${code !== null ? ` with exit code ${code}` : ""}`,
+      `Process exited${code !== null ? ` (code ${code})` : ""}`
+    );
+  }
+
+  async stop() {
+    this.emitStateChange("stopping");
+
+    if (!this.currentProcess) {
+      this.emitStateChange("stopped");
+      return;
+    }
+
+    this.currentProcess.kill();
   }
 }

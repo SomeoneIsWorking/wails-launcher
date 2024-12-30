@@ -1,5 +1,3 @@
-import type { Service } from "./Service";
-
 export type LogLevel = "ERR" | "INF" | "WARN" | "DBG";
 export type ServiceStatus =
   | "stopped"
