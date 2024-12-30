@@ -1,5 +1,6 @@
 import { mapValues } from "lodash-es";
 import { defineStore } from "pinia";
+import { MAX_LOGS } from '~/constants';
 import type { ServiceConfig } from "~/server/Service";
 import type { ServiceInfo, WebSocketMessage } from "~/server/types";
 import type { ClientServiceInfo, ClientLogEntry } from "~/types/client";
@@ -108,6 +109,9 @@ export const useServicesStore = defineStore("services", () => {
               read: false,
             };
             service.logs.push(clientLog);
+            if (service.logs.length > MAX_LOGS) {
+              service.logs.shift();
+            }
           }
           break;
         }

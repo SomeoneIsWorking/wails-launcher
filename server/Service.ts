@@ -1,3 +1,4 @@
+import { MAX_LOGS } from '../constants';
 import type { IProcessManager, LogEntry, ServiceStatus } from "./types";
 import { broadcast } from "./api/socket";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -51,6 +52,9 @@ export class Service {
     }
 
     this.logs.push(log);
+    if (this.logs.length > MAX_LOGS) {
+      this.logs.shift();
+    }
 
     broadcast("newLog", this.id, {
       log,
