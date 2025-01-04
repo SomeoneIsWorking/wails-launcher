@@ -6,7 +6,6 @@
       serviceName === store.selectedService?.name
     "
     @intersection="markLogAsRead"
-    :once="true"
   >
     <div
       :class="[
@@ -48,6 +47,7 @@ const store = useServicesStore();
 
 const markLogAsRead = async () => {
   store.markLogAsRead(props.serviceName, props.log.timestamp);
+  props.log.read = true;
 };
 
 const createVscodeUrl = (filePath: string, lineNumber?: string) => {

@@ -6,32 +6,29 @@
 
 <script setup lang="ts">
 const props = defineProps<{
-  threshold?: number
-  once?: boolean
-}>()
+  threshold?: number;
+}>();
 
 const emit = defineEmits<{
-  intersection: []
-}>()
+  intersection: [];
+}>();
 
-const element = ref<HTMLElement | null>(null)
+const element = ref<HTMLElement | null>(null);
 
 onMounted(() => {
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting) {
-      emit('intersection')
-      if (props.once && element.value) {
-        observer.unobserve(element.value)
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) {
+        emit("intersection");
       }
-    }
-  }, { threshold: props.threshold ?? 0.5 })
-  
-  if (element.value) {
-    observer.observe(element.value)
-  }
+    },
+    { threshold: props.threshold ?? 0.5 }
+  );
+
+  observer.observe(element.value!);
 
   onUnmounted(() => {
-    observer.disconnect()
-  })
-})
+    observer.disconnect();
+  });
+});
 </script>
