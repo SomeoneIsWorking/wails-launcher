@@ -13,6 +13,7 @@ function parseReadLogs(serviceName: string): Set<string> {
 export const useServicesStore = defineStore("services", () => {
   const services = ref<Record<string, ClientServiceInfo>>({});
   const selectedServiceId = ref<string | null>(null);
+  const scrollPositions = ref<Record<string, number | undefined>>({});
   const selectedService = computed(() =>
     selectedServiceId.value ? services.value[selectedServiceId.value] : null
   );
@@ -184,9 +185,18 @@ export const useServicesStore = defineStore("services", () => {
     addServices(reloadedServices);
   }
 
+  function saveScrollPosition(serviceId: string, position: number | undefined) {
+    scrollPositions.value[serviceId] = position;
+  }
+
+  function getScrollPosition(serviceId: string): number | undefined {
+    return scrollPositions.value[serviceId];
+  }
+
   return {
     services,
     selectedService,
+    selectedServiceId,
     startService,
     stopService,
     selectService,
@@ -197,6 +207,8 @@ export const useServicesStore = defineStore("services", () => {
     addService,
     updateService,
     clearLogs,
-    reloadConfig
+    reloadConfig,
+    saveScrollPosition,
+    getScrollPosition,
   };
 });

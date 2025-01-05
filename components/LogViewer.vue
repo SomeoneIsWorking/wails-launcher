@@ -1,14 +1,9 @@
 <template>
-  <div class="flex-1 flex flex-col overflow-hidden relative">
+  <div class="flex-1 flex flex-col overflow-hidden">
     <ServiceLogViewer
-      v-for="(service, id) in services"
-      :key="id"
-      :service-id="id"
-      :class="{
-        'opacity-0 pointer-events-none': selectedService?.name !== service.name,
-        'opacity-100': selectedService?.name === service.name,
-      }"
-      class="absolute inset-0"
+      v-if="selectedService && selectedServiceId"
+      :key="selectedService.path"
+      :service-id="selectedServiceId!"
     />
   </div>
 </template>
@@ -18,5 +13,5 @@ import { useServicesStore } from "~/stores/services";
 import { storeToRefs } from "pinia";
 
 const store = useServicesStore();
-const { selectedService, services } = storeToRefs(store);
+const { selectedService, selectedServiceId } = storeToRefs(store);
 </script>

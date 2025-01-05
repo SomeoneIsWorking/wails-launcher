@@ -32,7 +32,7 @@
       </div>
     </div>
     <div
-      ref="logContainer"
+      :ref="refs.logContainer"
       @scroll="handleScroll"
       class="flex-1 overflow-y-auto font-mono text-sm p-4 bg-gray-900 text-gray-100"
     >
@@ -67,6 +67,10 @@ const logContainer = ref<HTMLElement | null>(null);
 const isScrolledToBottom = ref(true);
 const currentOrPreviousErrorIndex = ref(-1);
 
+const refs = {
+  logContainer,
+};
+
 const errors = computed(() =>
   service.value.logs
     .map((log, index) => ({ ...log, elementIndex: index }))
@@ -94,6 +98,7 @@ const handleScroll = () => {
     bottom: scrollTop + clientHeight,
   };
   isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
+
   errorsAbove.value = errors.value.filter((x) => {
     const element = x.element();
     if (!element) return false;
@@ -116,9 +121,19 @@ const handleScroll = () => {
 };
 
 onMounted(() => {
+  if (!logContainer.value) return;
   handleScroll();
+  const savedPosition = store.getScrollPosition(props.serviceId);
+  logContainer.value!.scrollTop =
+    savedPosition ?? logContainer.value!.scrollHeight;
 });
 
+onBeforeUnmount(() => {
+  store.saveScrollPosition(
+    props.serviceId,
+    isScrolledToBottom.value ? undefined : logContainer.value!.scrollTop
+  );
+});
 const scrollToBottom = () => {
   logContainer.value?.scrollTo({
     top: logContainer.value.scrollHeight,
@@ -139,12 +154,15 @@ const clearLogs = async () => {
   await store.clearLogs(props.serviceId);
 };
 
-watchEffect(() => {
-  handleScroll();
-  if (isScrolledToBottom.value) {
-    nextTick(scrollToBottom);
+watch(
+  () => service.value.logs,
+  () => {
+    handleScroll();
+    if (isScrolledToBottom.value) {
+      nextTick(scrollToBottom);
+    }
   }
-});
+);
 </script>
 
 <style scoped lang="postcss">
