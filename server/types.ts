@@ -14,13 +14,15 @@ export interface LogEntry {
   raw: string;
 }
 
+export type ServiceEnv = Record<string, string>;
+
 export interface ServiceInfo {
   name: string;
   path: string;
   status: ServiceStatus;
   url?: string;
   logs: LogEntry[];
-  env: Record<string, string>;
+  env: ServiceEnv;
 }
 
 export interface WebSocketEventData {
@@ -45,6 +47,7 @@ export type WebSocketMessage = {
 export interface IProcessManager {
   start(): Promise<void>;
   stop(): Promise<void>;
+  updateConfig(path: string, env: ServiceEnv): void;
   on(event: 'log' | 'url' | 'statusChange', callback: (data: any) => void): void;
   off(event: 'log' | 'url' | 'statusChange', callback: (data: any) => void): void;
 }

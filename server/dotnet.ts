@@ -1,17 +1,22 @@
 import { spawn, exec, type ChildProcess } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
-import type { IProcessManager, LogEntry, LogLevel } from "./types";
+import type { IProcessManager, LogEntry, LogLevel, ServiceEnv } from "./types";
 
 const execAsync = promisify(exec);
 
 export class DotnetService extends EventEmitter implements IProcessManager {
   private currentProcess?: ChildProcess;
   private path: string;
-  private env: Record<string, string>;
+  private env: ServiceEnv;
 
-  constructor(path: string, env: Record<string, string>) {
+  constructor(path: string, env: ServiceEnv) {
     super();
+    this.path = path;
+    this.env = env;
+  }
+
+  updateConfig(path: string, env: ServiceEnv) {
     this.path = path;
     this.env = env;
   }

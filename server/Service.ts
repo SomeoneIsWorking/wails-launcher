@@ -1,5 +1,5 @@
 import { MAX_LOGS } from "../constants";
-import type { IProcessManager, LogEntry, ServiceStatus } from "./types";
+import type { IProcessManager, LogEntry, ServiceStatus, ServiceEnv } from "./types";
 import { broadcast } from "./api/socket";
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "crypto";
@@ -9,12 +9,12 @@ import { DotnetService } from "./dotnet";
 export interface ServiceConfig {
   name: string;
   path: string;
-  env: Record<string, string>;
+  env: ServiceEnv;
 }
 
 export class Service {
   id: string;
-  config: ServiceConfig;
+  private _config: ServiceConfig;
   status: ServiceStatus = "stopped";
   logs: LogEntry[] = [];
   url?: string;
@@ -22,11 +22,20 @@ export class Service {
 
   constructor(id: string, config: ServiceConfig) {
     this.id = id;
-    this.config = config;
+    this._config = config;
     this.processManager = new DotnetService(config.path, config.env);
     this.processManager.on("log", this.handleLog);
     this.processManager.on("url", this.handleUrl);
     this.processManager.on("statusChange", this.handleStatus);
+  }
+
+  get config(): ServiceConfig {
+    return this._config;
+  }
+
+  set config(value: ServiceConfig) {
+    this._config = value;
+    this.processManager.updateConfig(value.path, value.env);
   }
 
   private broadcastStatus() {
