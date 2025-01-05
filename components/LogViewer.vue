@@ -3,7 +3,7 @@
     <ServiceLogViewer
       v-if="selectedService && selectedServiceId"
       :key="selectedService.path"
-      :service-id="selectedServiceId!"
+      :service-id="selectedServiceId"
     />
   </div>
 </template>
