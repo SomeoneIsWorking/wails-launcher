@@ -1,7 +1,7 @@
 <template>
   <div class="flex-1 flex flex-col overflow-hidden">
     <div
-      class="absolute top-4 right-4 flex items-stretch bg-gray-800/90 rounded-full shadow-lg backdrop-blur-sm text-sm text-gray-300"
+      class="absolute z-10 top-4 right-6 flex items-stretch bg-gray-800/90 rounded-full shadow-lg backdrop-blur-sm text-sm text-gray-300"
     >
       <button @click="clearLogs" class="px-5 py-2 hover:text-white">
         Clear Logs
@@ -31,19 +31,18 @@
         </button>
       </div>
     </div>
-    <div
-      :ref="refs.logContainer"
+    <VirtualScroller
+      ref="virtualScroller"
+      :items="service.logs"
+      :item-height="24"
+      height="100%"
+      :buffer="10"
       @scroll="handleScroll"
-      class="flex-1 overflow-y-auto font-mono text-sm p-4 bg-gray-900 text-gray-100"
     >
-      <LogEntry
-        v-for="(log, index) in service.logs"
-        :key="index"
-        :log="log"
-        :service-name="service.name"
-      />
-    </div>
-
+      <template #default="{ item: log, index }">
+        <LogEntry :log="log" :service-name="service.name" />
+      </template>
+    </VirtualScroller>
     <button
       v-if="!isScrolledToBottom"
       @click="scrollToBottom"
@@ -63,91 +62,65 @@ const props = defineProps<{
 }>();
 const store = useServicesStore();
 const service = computed(() => store.services[props.serviceId]);
-const logContainer = ref<HTMLElement | null>(null);
+const virtualScroller = ref();
 const isScrolledToBottom = ref(true);
 const currentOrPreviousErrorIndex = ref(-1);
-
-const refs = {
-  logContainer,
-};
 
 const errors = computed(() =>
   service.value.logs
     .map((log, index) => ({ ...log, elementIndex: index }))
     .filter(({ level }) => level === "ERR")
-    .map((log) => ({
-      ...log,
-      element: () =>
-        logContainer.value?.children[log.elementIndex] as
-          | HTMLElement
-          | undefined,
-    }))
 );
 
-type ErrorLog = (typeof errors)["value"][number];
+const errorsAbove = ref<typeof errors.value>([]);
+const errorsBelow = ref<typeof errors.value>([]);
 
-const errorsAbove = ref<ErrorLog[]>([]);
-const errorsBelow = ref<ErrorLog[]>([]);
+const handleScroll = ({
+  scrollTop,
+  isAtBottom,
+}: {
+  scrollTop: number;
+  isAtBottom: boolean;
+}) => {
+  isScrolledToBottom.value = isAtBottom;
 
-const handleScroll = () => {
-  if (!logContainer.value) return;
+  // Update errors above/below based on scroll position
+  const viewportHeight = virtualScroller.value?.$el.clientHeight ?? 0;
+  errorsAbove.value = errors.value.filter(
+    (x) => x.elementIndex * 24 < scrollTop
+  );
+  errorsBelow.value = errors.value.filter(
+    (x) => x.elementIndex * 24 > scrollTop + viewportHeight
+  );
 
-  const { scrollTop, scrollHeight, clientHeight } = logContainer.value;
-  const scrollRect = {
-    top: scrollTop,
-    bottom: scrollTop + clientHeight,
-  };
-  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
-
-  errorsAbove.value = errors.value.filter((x) => {
-    const element = x.element();
-    if (!element) return false;
-    return element.offsetTop < scrollTop;
-  });
-  errorsBelow.value = errors.value.filter((x) => {
-    const element = x.element();
-    if (!element) return false;
-    return element.offsetTop > scrollRect.top;
-  });
-  currentOrPreviousErrorIndex.value = errors.value.findLastIndex((x) => {
-    const element = x.element();
-    if (!element) return false;
-    const rect = {
-      top: element.offsetTop,
-      bottom: element.offsetTop + element.offsetHeight,
-    };
-    return rect.top <= scrollRect.bottom;
-  });
+  currentOrPreviousErrorIndex.value = errors.value.findLastIndex(
+    (x) => x.elementIndex * 24 <= scrollTop + viewportHeight
+  );
 };
 
 onMounted(() => {
-  if (!logContainer.value) return;
-  handleScroll();
   const savedPosition = store.getScrollPosition(props.serviceId);
-  logContainer.value!.scrollTop =
-    savedPosition ?? logContainer.value!.scrollHeight;
+  if (savedPosition) {
+    virtualScroller.value?.scrollTo(savedPosition);
+  } else {
+    scrollToBottom();
+  }
 });
 
 onBeforeUnmount(() => {
   store.saveScrollPosition(
     props.serviceId,
-    isScrolledToBottom.value ? undefined : logContainer.value!.scrollTop
+    isScrolledToBottom.value ? undefined : virtualScroller.value?.$el.scrollTop
   );
 });
+
 const scrollToBottom = () => {
-  logContainer.value?.scrollTo({
-    top: logContainer.value.scrollHeight,
-    behavior: "smooth",
-  });
+  virtualScroller.value?.scrollToBottom();
 };
 
-const navigateError = (item: ErrorLog | undefined) => {
-  const targetEl = item?.element();
-  if (!targetEl) return;
-  targetEl.parentElement?.scroll({
-    top: targetEl.offsetTop,
-    behavior: "smooth",
-  });
+const navigateError = (error: (typeof errors.value)[number] | undefined) => {
+  if (!error) return;
+  virtualScroller.value?.scrollTo(error.elementIndex * 24);
 };
 
 const clearLogs = async () => {
@@ -157,7 +130,6 @@ const clearLogs = async () => {
 watch(
   () => service.value.logs,
   () => {
-    handleScroll();
     if (isScrolledToBottom.value) {
       nextTick(scrollToBottom);
     }
