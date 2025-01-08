@@ -56,21 +56,17 @@ const createVscodeUrl = (filePath: string, lineNumber?: string) => {
 };
 
 const processLogContent = (content: string) => {
-  // Process HTTP method/version patterns first to prevent them from being treated as file paths
+  // First process URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
   content = content.replace(
-    /HTTP\/[0-9.]+|GET|POST|PUT|DELETE|PATCH/g,
-    (match) => `<span class="text-gray-400">${match}</span>`
+    urlRegex,
+    (url) =>
+      `<a href="${url}" target="_blank" class="px-1 rounded bg-blue-900/30 text-blue-300 hover:bg-blue-800/50 hover:text-blue-200">${url}</a>`
   );
 
-  // Process URLs with full context
-  const urlRegex = /\b(https?:\/\/[^\s<>"']+[\w/-])/g;
-  content = content.replace(urlRegex, (url) => {
-    const encodedUrl = url.replace(/[<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-    return `<a href="${encodedUrl}" target="_blank" class="px-1 rounded bg-blue-900/30 text-blue-300 hover:bg-blue-800/50 hover:text-blue-200">${encodedUrl}</a>`;
-  });
-
-  // Process file paths (more restrictive pattern)
-  const fileRegex = /(?<![\w/-])(\/[\w.-]+(?:\/[\w.-]+)+\.[\w]+)(?::line (\d+))?/g;
+  // Then process file paths
+  const fileRegex =
+    /([\/\\][\w\s\-./\\]+[\/\\][\w\s\-./\\]+\.[\w]+)(?::line (\d+))?/g;
   return content.replace(fileRegex, (match, filePath, lineNumber) => {
     const trimmedPath = filePath.trim();
     return `<a href="${createVscodeUrl(
