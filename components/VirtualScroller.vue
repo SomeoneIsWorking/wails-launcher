@@ -33,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 
 const props = defineProps<{
   items: any[];
@@ -49,7 +49,6 @@ const emit = defineEmits<{
 const scrollerRef = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const heightCache = new Map<number, number>();
-const poolRefs = new Map<string, HTMLElement>();
 const defaultHeight = 50;
 const poolSize = props.poolSize || 2;
 
@@ -158,14 +157,6 @@ const scrollToIndex = (index: number) => {
   }
 };
 
-const getItemMeasures = () => ({
-  heights: Array.from(heightCache),
-  viewport: {
-    height: scrollerRef.value?.clientHeight || 0,
-    scrollTop: scrollTop.value,
-  },
-});
-
 const getVisibleRange = () => {
   if (!scrollerRef.value) return { start: 0, end: 0 };
   
@@ -204,33 +195,8 @@ defineExpose({
   scrollTo,
   scrollToBottom,
   scrollToIndex,
-  getItemMeasures, // Add this
-  getVisibleRange, // Add this
+  getVisibleRange
 });
-
-const registerPool = (el: HTMLElement | null, poolId: string) => {
-  if (!el) return;
-  poolRefs.set(poolId, el);
-  observePoolItems(el);
-};
-
-const observePoolItems = (poolEl: HTMLElement) => {
-  const observer = new ResizeObserver((entries) => {
-    entries.forEach((entry) => {
-      const el = entry.target as HTMLElement;
-      const index = parseInt(el.getAttribute('data-index') || '0');
-      const height = entry.borderBoxSize[0]?.blockSize || el.offsetHeight;
-      if (heightCache.get(index) !== height) {
-        heightCache.set(index, height);
-        updatePool();
-      }
-    });
-  });
-
-  Array.from(poolEl.children).forEach((child) => {
-    observer.observe(child);
-  });
-};
 
 const getItemsHeight = (start: number, end: number): number => {
   let height = 0;
@@ -239,8 +205,6 @@ const getItemsHeight = (start: number, end: number): number => {
   }
   return height;
 };
-
-// ... existing scroll methods ...
 
 onMounted(() => {
   updatePool();
