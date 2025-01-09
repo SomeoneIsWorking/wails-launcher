@@ -158,10 +158,54 @@ const scrollToIndex = (index: number) => {
   }
 };
 
+const getItemMeasures = () => ({
+  heights: Array.from(heightCache),
+  viewport: {
+    height: scrollerRef.value?.clientHeight || 0,
+    scrollTop: scrollTop.value,
+  },
+});
+
+const getVisibleRange = () => {
+  if (!scrollerRef.value) return { start: 0, end: 0 };
+  
+  const containerHeight = scrollerRef.value.clientHeight;
+  const currentScroll = scrollTop.value;
+  
+  // Find first visible item without buffer
+  let visibleStart = 0;
+  let accHeight = 0;
+  
+  for (let i = 0; i < props.items.length; i++) {
+    const height = heightCache.get(i) || defaultHeight;
+    if (accHeight + height > currentScroll) {
+      visibleStart = i;
+      break;
+    }
+    accHeight += height;
+  }
+
+  // Find last visible item
+  let visibleEnd = visibleStart;
+  let heightSum = 0;
+  
+  while (visibleEnd < props.items.length && heightSum < containerHeight) {
+    heightSum += heightCache.get(visibleEnd) || defaultHeight;
+    visibleEnd++;
+  }
+
+  return {
+    start: visibleStart,
+    end: visibleEnd - 1
+  };
+};
+
 defineExpose({
   scrollTo,
   scrollToBottom,
-  scrollToIndex, // Add this
+  scrollToIndex,
+  getItemMeasures, // Add this
+  getVisibleRange, // Add this
 });
 
 const registerPool = (el: HTMLElement | null, poolId: string) => {

@@ -85,19 +85,19 @@ const handleScroll = ({
 }) => {
   isScrolledToBottom.value = isAtBottom;
 
-  // Update errors above/below based on scroll position
-  const viewportHeight = virtualScroller.value?.$el.clientHeight ?? 0;
-  const avgItemHeight = 24; // approximate average height
+  const range = virtualScroller.value?.getVisibleRange();
+  if (!range) return;
 
   errorsAbove.value = errors.value.filter(
-    (x) => x.elementIndex * avgItemHeight < scrollTop
+    error => error.elementIndex < range.start
   );
+  
   errorsBelow.value = errors.value.filter(
-    (x) => x.elementIndex * avgItemHeight > scrollTop + viewportHeight
+    error => error.elementIndex > range.end
   );
 
-  currentOrPreviousErrorIndex.value = errors.value.findLastIndex(
-    (x) => x.elementIndex * avgItemHeight <= scrollTop + viewportHeight
+  currentOrPreviousErrorIndex.value = errors.value.findIndex(
+    error => error.elementIndex <= range.end && error.elementIndex >= range.start
   );
 };
 
