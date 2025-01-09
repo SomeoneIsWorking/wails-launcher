@@ -34,7 +34,6 @@
     <VirtualScroller
       ref="virtualScroller"
       :items="service.logs"
-      :item-height="24"
       height="100%"
       :buffer="10"
       @scroll="handleScroll"
@@ -56,13 +55,15 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted } from "vue";
 import { ChevronUp, ChevronDown } from "lucide-vue-next";
+import type { ComponentInstance } from "vue";
+import VirtualScroller from "./VirtualScroller.vue";
 
 const props = defineProps<{
   serviceId: string;
 }>();
 const store = useServicesStore();
 const service = computed(() => store.services[props.serviceId]);
-const virtualScroller = ref();
+const virtualScroller = ref<ComponentInstance<typeof VirtualScroller>>();
 const isScrolledToBottom = ref(true);
 const currentOrPreviousErrorIndex = ref(-1);
 
@@ -86,15 +87,17 @@ const handleScroll = ({
 
   // Update errors above/below based on scroll position
   const viewportHeight = virtualScroller.value?.$el.clientHeight ?? 0;
+  const avgItemHeight = 24; // approximate average height
+
   errorsAbove.value = errors.value.filter(
-    (x) => x.elementIndex * 24 < scrollTop
+    (x) => x.elementIndex * avgItemHeight < scrollTop
   );
   errorsBelow.value = errors.value.filter(
-    (x) => x.elementIndex * 24 > scrollTop + viewportHeight
+    (x) => x.elementIndex * avgItemHeight > scrollTop + viewportHeight
   );
 
   currentOrPreviousErrorIndex.value = errors.value.findLastIndex(
-    (x) => x.elementIndex * 24 <= scrollTop + viewportHeight
+    (x) => x.elementIndex * avgItemHeight <= scrollTop + viewportHeight
   );
 };
 
@@ -120,7 +123,7 @@ const scrollToBottom = () => {
 
 const navigateError = (error: (typeof errors.value)[number] | undefined) => {
   if (!error) return;
-  virtualScroller.value?.scrollTo(error.elementIndex * 24);
+  virtualScroller.value?.scrollToIndex(error.elementIndex);
 };
 
 const clearLogs = async () => {
