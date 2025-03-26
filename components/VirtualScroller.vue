@@ -59,9 +59,21 @@ const sizingPools = ref<Array<{
 }>>([]);
 
 const totalHeight = computed(() => {
-  return props.items.reduce((acc, _, index) => {
+  if (!scrollerRef.value) return 0;
+  
+  const baseHeight = props.items.reduce((acc, _, index) => {
     return acc + (heightCache.get(index) || defaultHeight);
   }, 0);
+  
+  const containerHeight = scrollerRef.value.clientHeight;
+  const currentScroll = scrollTop.value;
+  
+  // If we're scrolled to the bottom, adjust the total height to prevent empty space
+  if (currentScroll + containerHeight > baseHeight) {
+    return currentScroll + containerHeight;
+  }
+  
+  return baseHeight;
 });
 
 const updatePool = () => {
@@ -151,10 +163,20 @@ const getItemPosition = (index: number): number => {
 };
 
 const scrollToIndex = (index: number) => {
-  if (scrollerRef.value) {
-    const position = getItemPosition(index);
-    scrollerRef.value.scrollTop = position;
-  }
+  if (!scrollerRef.value) return;
+
+  const position = getItemPosition(index);
+  scrollerRef.value.scrollTop = position;
+
+  // Check if we actually reached the correct position after a short delay
+  // to allow for height measurements to be updated
+  setTimeout(() => {
+    const currentPosition = getItemPosition(index);
+    if (Math.abs(scrollerRef.value!.scrollTop - currentPosition) > 1) {
+      // If we didn't reach the correct position, try again
+      scrollerRef.value!.scrollTop = currentPosition;
+    }
+  }, 100);
 };
 
 const getVisibleRange = () => {
