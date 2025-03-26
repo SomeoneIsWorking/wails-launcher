@@ -89,6 +89,23 @@ const errorsBelow = ref<typeof errors.value>([]);
 
 const searchQuery = ref("");
 
+const updateErrorNavigation = () => {
+  const range = virtualScroller.value?.getVisibleRange();
+  if (!range) return;
+
+  errorsAbove.value = errors.value.filter(
+    error => error.elementIndex < range.start
+  );
+  
+  errorsBelow.value = errors.value.filter(
+    error => error.elementIndex > range.end
+  );
+
+  currentOrPreviousErrorIndex.value = errors.value.findIndex(
+    error => error.elementIndex <= range.end && error.elementIndex >= range.start
+  );
+};
+
 const filteredLogs = computed(() => {
   if (!searchQuery.value) return service.value.logs;
   
@@ -108,21 +125,7 @@ const handleScroll = ({
   isAtBottom: boolean;
 }) => {
   isScrolledToBottom.value = isAtBottom;
-
-  const range = virtualScroller.value?.getVisibleRange();
-  if (!range) return;
-
-  errorsAbove.value = errors.value.filter(
-    error => error.elementIndex < range.start
-  );
-  
-  errorsBelow.value = errors.value.filter(
-    error => error.elementIndex > range.end
-  );
-
-  currentOrPreviousErrorIndex.value = errors.value.findIndex(
-    error => error.elementIndex <= range.end && error.elementIndex >= range.start
-  );
+  updateErrorNavigation();
 };
 
 const savedPosition = ref<ScrollPosition | undefined>(undefined);
@@ -143,8 +146,11 @@ const handleVirtualScrollerReady = () => {
       if (virtualScroller.value?.$el) {
         virtualScroller.value.$el.scrollTop += offset;
       }
+      updateErrorNavigation();
     });
     savedPosition.value = undefined;
+  } else {
+    updateErrorNavigation();
   }
 };
 
