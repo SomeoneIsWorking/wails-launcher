@@ -46,6 +46,7 @@
       height="100%"
       :buffer="10"
       @scroll="handleScroll"
+      @ready="handleVirtualScrollerReady"
     >
       <template #default="{ item: log, index }">
         <LogEntry :log="log" :service-name="service.name" />
@@ -62,10 +63,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted } from "vue";
+import { ref, nextTick, computed, onMounted, watch, onBeforeUnmount } from "vue";
 import { ChevronUp, ChevronDown } from "lucide-vue-next";
 import type { ComponentInstance } from "vue";
 import VirtualScroller from "./VirtualScroller.vue";
+import type { ScrollPosition } from "~/types/client";
 
 const props = defineProps<{
   serviceId: string;
@@ -123,19 +125,45 @@ const handleScroll = ({
   );
 };
 
+const savedPosition = ref<ScrollPosition | undefined>(undefined);
+
 onMounted(() => {
-  const savedPosition = store.getScrollPosition(props.serviceId);
-  if (savedPosition) {
-    virtualScroller.value?.scrollTo(savedPosition);
-  } else {
+  savedPosition.value = store.getScrollPosition(props.serviceId);
+  if (!savedPosition.value) {
     scrollToBottom();
   }
 });
 
+const handleVirtualScrollerReady = () => {
+  if (savedPosition.value !== undefined) {
+    const { topIndex, offset } = savedPosition.value;
+    virtualScroller.value?.scrollToIndex(topIndex);
+    // After scrolling to the index, adjust by the offset
+    nextTick(() => {
+      if (virtualScroller.value?.$el) {
+        virtualScroller.value.$el.scrollTop += offset;
+      }
+    });
+    savedPosition.value = undefined;
+  }
+};
+
 onBeforeUnmount(() => {
+  if (!virtualScroller.value?.$el) return;
+  
+  const range = virtualScroller.value.getVisibleRange();
+  if (!range) return;
+  
+  const scrollTop = virtualScroller.value.$el.scrollTop;
+  const firstItemTop = virtualScroller.value.getItemPosition(range.start);
+  const offset = scrollTop - firstItemTop;
+  
   store.saveScrollPosition(
     props.serviceId,
-    isScrolledToBottom.value ? undefined : virtualScroller.value?.$el.scrollTop
+    isScrolledToBottom.value ? undefined : {
+      topIndex: range.start,
+      offset
+    }
   );
 });
 

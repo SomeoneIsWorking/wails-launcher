@@ -33,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 
 const props = defineProps<{
   items: any[];
@@ -44,6 +44,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   scroll: [{ scrollTop: number; isAtBottom: boolean }];
+  ready: [];
 }>();
 
 const scrollerRef = ref<HTMLElement | null>(null);
@@ -217,7 +218,8 @@ defineExpose({
   scrollTo,
   scrollToBottom,
   scrollToIndex,
-  getVisibleRange
+  getVisibleRange,
+  getItemPosition
 });
 
 const getItemsHeight = (start: number, end: number): number => {
@@ -230,6 +232,10 @@ const getItemsHeight = (start: number, end: number): number => {
 
 onMounted(() => {
   updatePool();
+  // Emit ready event after initial pool update
+  nextTick(() => {
+    emit('ready');
+  });
 });
 
 watch(() => props.items.length, updatePool);

@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { MAX_LOGS } from '~/constants';
 import type { ServiceConfig } from "~/server/Service";
 import type { ServiceInfo, WebSocketMessage } from "~/server/types";
-import type { ClientServiceInfo, ClientLogEntry } from "~/types/client";
+import type { ClientServiceInfo, ClientLogEntry, ScrollPosition } from "~/types/client";
 
 function parseReadLogs(serviceName: string): Set<string> {
   const stored = localStorage.getItem(`readLogs_${serviceName}`);
@@ -13,7 +13,7 @@ function parseReadLogs(serviceName: string): Set<string> {
 export const useServicesStore = defineStore("services", () => {
   const services = ref<Record<string, ClientServiceInfo>>({});
   const selectedServiceId = ref<string | null>(null);
-  const scrollPositions = ref<Record<string, number | undefined>>({});
+  const scrollPositions = ref<Record<string, ScrollPosition | undefined>>({});
   const selectedService = computed(() =>
     selectedServiceId.value ? services.value[selectedServiceId.value] : null
   );
@@ -185,11 +185,11 @@ export const useServicesStore = defineStore("services", () => {
     addServices(reloadedServices);
   }
 
-  function saveScrollPosition(serviceId: string, position: number | undefined) {
+  function saveScrollPosition(serviceId: string, position: ScrollPosition | undefined) {
     scrollPositions.value[serviceId] = position;
   }
 
-  function getScrollPosition(serviceId: string): number | undefined {
+  function getScrollPosition(serviceId: string): ScrollPosition | undefined {
     return scrollPositions.value[serviceId];
   }
 

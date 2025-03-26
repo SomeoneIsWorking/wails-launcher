@@ -8,3 +8,8 @@ export interface ClientServiceInfo extends Omit<ServerServiceInfo, 'logs'> {
   logs: ClientLogEntry[];
   unreadErrors?: number;
 }
+
+export interface ScrollPosition {
+  topIndex: number;
+  offset: number;
+}
