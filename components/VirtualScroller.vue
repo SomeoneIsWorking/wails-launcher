@@ -1,7 +1,7 @@
 <template>
   <div
     ref="scrollerRef"
-    class="flex-1 overflow-y-auto font-mono text-sm bg-gray-900 text-gray-100 relative"
+    class="flex-1 overflow-y-auto font-mono text-sm bg-gray-900 text-gray-100 relative break-words"
     @scroll="handleScroll"
     :style="{ height }"
   >

@@ -3,6 +3,15 @@
     <div
       class="absolute z-10 top-4 right-6 flex items-stretch bg-gray-800/90 rounded-full shadow-lg backdrop-blur-sm text-sm text-gray-300"
     >
+      <div class="px-5 flex items-center">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search logs..."
+          class="bg-transparent border-none outline-none text-white placeholder-gray-400 w-48"
+        />
+      </div>
+      <span class="inline-block w-0.5 flex-grow bg-gray-500"></span>
       <button @click="clearLogs" class="px-5 py-2 hover:text-white">
         Clear Logs
       </button>
@@ -33,7 +42,7 @@
     </div>
     <VirtualScroller
       ref="virtualScroller"
-      :items="service.logs"
+      :items="filteredLogs"
       height="100%"
       :buffer="10"
       @scroll="handleScroll"
@@ -75,6 +84,19 @@ const errors = computed(() =>
 
 const errorsAbove = ref<typeof errors.value>([]);
 const errorsBelow = ref<typeof errors.value>([]);
+
+const searchQuery = ref("");
+
+const filteredLogs = computed(() => {
+  if (!searchQuery.value) return service.value.logs;
+  
+  const query = searchQuery.value.toLowerCase();
+  return service.value.logs.filter(log => 
+    log.message.toLowerCase().includes(query) ||
+    log.level.toLowerCase().includes(query) ||
+    log.timestamp.toLowerCase().includes(query)
+  );
+});
 
 const handleScroll = ({
   scrollTop,
@@ -131,7 +153,7 @@ const clearLogs = async () => {
 };
 
 watch(
-  () => service.value.logs,
+  () => filteredLogs.value,
   () => {
     if (isScrolledToBottom.value) {
       nextTick(scrollToBottom);
@@ -153,5 +175,13 @@ button:not(:disabled):hover {
 
 button.nav-buttons {
   @apply rounded-full bg-gray-700 text-white disabled:opacity-50 flex items-center justify-center h-6 w-12;
+}
+
+input::placeholder {
+  color: #9ca3af;
+}
+
+input:focus::placeholder {
+  color: #6b7280;
 }
 </style>

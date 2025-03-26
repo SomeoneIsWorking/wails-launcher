@@ -148,15 +148,20 @@ export class DotnetService extends EventEmitter implements IProcessManager {
 
   private spawn() {
     try {
+      const env = {
+        ...process.env,
+        DOTNET_ENVIRONMENT: "Development",
+        ...this.env,
+      };
+      this.emitLog(
+        "INF",
+        `Starting service in ${this.path} with env: ${JSON.stringify(env)}`
+      );
       return spawn("dotnet", ["run"], {
         cwd: this.path,
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          DOTNET_ENVIRONMENT: "Development",
-          ...this.env,
-        },
+        env,
       });
     } catch (error: any) {
       this.emitStateChange("error");

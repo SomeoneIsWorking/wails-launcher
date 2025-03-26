@@ -18,7 +18,10 @@
   </VIntersectionObserver>
   <div
     v-else
-    :class="['whitespace-pre-wrap leading-5 py-0.5', logLevelClass]"
+    :class="[
+      'whitespace-pre-wrap leading-5 py-0.5 break-all overflow-wrap-anywhere',
+      logLevelClass
+    ]"
     v-html="processedContent"
   />
 </template>
@@ -76,3 +79,10 @@ const processLogContent = (content: string) => {
   });
 };
 </script>
+
+<style scoped>
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+</style>
