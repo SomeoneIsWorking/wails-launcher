@@ -160,6 +160,21 @@ export const useServicesStore = defineStore("services", () => {
     }
   }
 
+  async function restartService(id: string) {
+    const serviceRef = services.value[id];
+    if (!serviceRef) {
+      throw new Error(`Service ${id} not found`);
+    }
+
+    try {
+      await stopService(id);
+      await startService(id);
+    } catch (error) {
+      serviceRef.status = "error";
+      console.error("Failed to restart service:", error);
+    }
+  }
+
   function selectService(id: string) {
     if (!services.value[id]) {
       throw new Error(`Service ${id} not found`);
@@ -199,6 +214,7 @@ export const useServicesStore = defineStore("services", () => {
     selectedServiceId,
     startService,
     stopService,
+    restartService,
     selectService,
     addServices,
     isLogRead,

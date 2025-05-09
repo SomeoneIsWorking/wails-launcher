@@ -199,7 +199,7 @@ export class DotnetService extends EventEmitter implements IProcessManager {
 
   private onClose(code: number | null) {
     this.currentProcess = undefined;
-    const status = code === 0 ? "stopped" : "error";
+    const status = code === 0 || code === 143 ? "stopped" : "error";
     this.emitStateChange(status);
     this.emitLog(
       status === "error" ? "ERR" : "INF",
@@ -216,6 +216,15 @@ export class DotnetService extends EventEmitter implements IProcessManager {
       return;
     }
 
-    this.currentProcess.kill();
+    // First try to gracefully stop the process
+    this.currentProcess.kill('SIGTERM');
+    
+    // Wait for 5 seconds to see if the process stops naturally
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // If process is still running, force kill it
+    if (this.currentProcess) {
+      await this.killProcess(this.currentProcess.pid!.toString());
+    }
   }
 }

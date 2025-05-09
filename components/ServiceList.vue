@@ -53,9 +53,10 @@
               service.status === 'stopping' ||
               service.status === 'initializing'
             "
-            class="px-2 py-1 text-sm bg-green-500 text-white rounded disabled:opacity-50 min-w-[60px]"
+            class="p-2 text-sm bg-green-500 text-white rounded disabled:opacity-50 hover:bg-green-600"
+            title="Start"
           >
-            {{ service.status === "starting" ? "..." : "Start" }}
+            <PlayIcon :size="16" />
           </button>
           <button
             @click="store.stopService(id)"
@@ -64,9 +65,18 @@
               service.status === 'starting' ||
               service.status === 'stopping'
             "
-            class="px-2 py-1 text-sm bg-red-500 text-white rounded disabled:opacity-50 min-w-[60px]"
+            class="p-2 text-sm bg-red-500 text-white rounded disabled:opacity-50 hover:bg-red-600"
+            title="Stop"
           >
-            {{ service.status === "stopping" ? "..." : "Stop" }}
+            <SquareIcon :size="16" />
+          </button>
+          <button
+            @click="store.restartService(id)"
+            :disabled="service.status !== 'running'"
+            class="p-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50 hover:bg-blue-600"
+            title="Restart"
+          >
+            <RotateCwIcon :size="16" />
           </button>
         </div>
       </div>
@@ -105,7 +115,7 @@
 import { storeToRefs } from "pinia";
 import { useServicesStore } from "~/stores/services";
 import { ref } from "vue";
-import { SettingsIcon, RefreshCwIcon } from "lucide-vue-next";
+import { SettingsIcon, RefreshCwIcon, PlayIcon, SquareIcon, RotateCwIcon } from "lucide-vue-next";
 
 const store = useServicesStore();
 const { services, selectedService } = storeToRefs(store);

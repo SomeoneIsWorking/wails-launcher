@@ -184,6 +184,7 @@ const navigateError = (error: (typeof errors.value)[number] | undefined) => {
 
 const clearLogs = async () => {
   await store.clearLogs(props.serviceId);
+  virtualScroller.value?.scrollToIndex(0);
 };
 
 watch(
