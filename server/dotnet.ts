@@ -155,7 +155,7 @@ export class DotnetService extends EventEmitter implements IProcessManager {
       };
       this.emitLog(
         "INF",
-        `Starting service in ${this.path} with env: ${JSON.stringify(env)}`
+        `Starting service in ${this.path}`
       );
       return spawn("dotnet", ["run"], {
         cwd: this.path,
