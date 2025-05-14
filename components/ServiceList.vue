@@ -13,7 +13,7 @@
         ]"
       >
         <div class="flex items-center justify-between mb-2">
-          <span>
+          <span class="text-gray-800">
             {{ service.name }}
           </span>
           <div class="flex items-center gap-2">
