@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
+	"nuxt-launcher/pkg/config"
+	"nuxt-launcher/pkg/group"
 	"nuxt-launcher/pkg/process"
+	"nuxt-launcher/pkg/service"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -23,107 +23,28 @@ type ServiceStatus = process.ServiceStatus
 type LogEntry = process.LogEntry
 
 // ServiceEnv represents environment variables
-type ServiceEnv = process.ServiceEnv
+type ServiceEnv = config.ServiceEnv
 
 // ServiceConfig represents service configuration
-type ServiceConfig struct {
-	Name string     `json:"name"`
-	Path string     `json:"path"`
-	Env  ServiceEnv `json:"env"`
-}
+type ServiceConfig = config.ServiceConfig
+
+// GroupConfig represents group configuration
+type GroupConfig = config.GroupConfig
 
 // ServiceInfo represents service information
-type ServiceInfo struct {
-	Name   string        `json:"name"`
-	Path   string        `json:"path"`
-	Status ServiceStatus `json:"status"`
-	URL    *string       `json:"url,omitempty"`
-	Logs   []LogEntry    `json:"logs"`
-	Env    ServiceEnv    `json:"env"`
-}
-
-// Service represents a service
-type Service struct {
-	ID             string
-	Config         ServiceConfig
-	Status         ServiceStatus
-	Logs           []LogEntry
-	URL            *string
-	processManager *process.DotnetService
-	mu             sync.RWMutex
-	app            *App
-}
-
-// NewService creates a new service
-func NewService(id string, config ServiceConfig, app *App) *Service {
-	service := &Service{
-		ID:     id,
-		Config: config,
-		Status: process.Stopped,
-		Logs:   []LogEntry{},
-		app:    app,
-	}
-	service.processManager = process.NewDotnetService(config.Path, config.Env)
-	go service.listenEvents()
-	return service
-}
-
-// listenEvents listens to process manager events
-func (s *Service) listenEvents() {
-	logChan, urlChan, statusChan := s.processManager.GetChannels()
-	for {
-		select {
-		case log := <-logChan:
-			s.mu.Lock()
-			s.Logs = append(s.Logs, log)
-			if len(s.Logs) > 100 { // MAX_LOGS
-				s.Logs = s.Logs[1:]
-			}
-			s.mu.Unlock()
-			// Emit to frontend
-			s.app.emitToFrontend("newLog", s.ID, map[string]interface{}{"log": log})
-			if log.Level == process.Err {
-				s.app.emitToFrontend("statusUpdate", s.ID, map[string]interface{}{
-					"status": s.Status,
-					"url":    s.URL,
-				})
-			}
-		case url := <-urlChan:
-			s.mu.Lock()
-			s.URL = &url
-			s.mu.Unlock()
-			s.app.emitToFrontend("statusUpdate", s.ID, map[string]interface{}{
-				"status": s.Status,
-				"url":    s.URL,
-			})
-		case status := <-statusChan:
-			s.mu.Lock()
-			if status == process.Stopped || status == process.Error {
-				s.URL = nil
-			}
-			if status == process.Initializing {
-				s.Status = process.Running
-			} else {
-				s.Status = status
-			}
-			s.mu.Unlock()
-			s.app.emitToFrontend("statusUpdate", s.ID, map[string]interface{}{
-				"status": s.Status,
-				"url":    s.URL,
-			})
-		}
-	}
-}
+type ServiceInfo = service.ServiceInfo
 
 // App struct
 type App struct {
 	ctx      context.Context
-	services map[string]*Service
+	services map[string]*service.Service
+	groups   *group.Manager
+	config   *config.Config
 	mu       sync.RWMutex
 }
 
-// emitToFrontend emits an event to the frontend
-func (a *App) emitToFrontend(event string, serviceId string, data interface{}) {
+// EmitToFrontend emits an event to the frontend
+func (a *App) EmitToFrontend(event string, serviceId string, data interface{}) {
 	runtime.EventsEmit(a.ctx, "serviceEvent", map[string]interface{}{
 		"type":      event,
 		"serviceId": serviceId,
@@ -133,8 +54,16 @@ func (a *App) emitToFrontend(event string, serviceId string, data interface{}) {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	cfg, err := config.Load()
+	if err != nil {
+		// Handle error, maybe create empty config
+		cfg = &config.Config{Groups: make(map[string]config.GroupConfig)}
+	}
+
 	app := &App{
-		services: make(map[string]*Service),
+		services: make(map[string]*service.Service),
+		groups:   group.NewManager(cfg.Groups),
+		config:   cfg,
 	}
 	app.loadServices()
 	return app
@@ -146,17 +75,12 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// loadServices loads services from services.json
+// loadServices loads services from configuration
 func (a *App) loadServices() {
-	data, err := os.ReadFile("services.json")
-	if err != nil {
-		return
-	}
-	var configs map[string]ServiceConfig
-	json.Unmarshal(data, &configs)
-	for id, config := range configs {
-		service := NewService(id, config, a)
-		a.services[id] = service
+	groupServices := a.groups.GetGroupServices()
+	for serviceId, serviceConfig := range groupServices {
+		srv := service.NewService(serviceId, serviceConfig, a)
+		a.services[serviceId] = srv
 	}
 }
 
@@ -165,157 +89,206 @@ func (a *App) GetServices() map[string]ServiceInfo {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	result := make(map[string]ServiceInfo)
-	for id, service := range a.services {
-		service.mu.RLock()
-		result[id] = ServiceInfo{
-			Name:   service.Config.Name,
-			Path:   service.Config.Path,
-			Status: service.Status,
-			URL:    service.URL,
-			Logs:   service.Logs,
-			Env:    service.Config.Env,
-		}
-		service.mu.RUnlock()
+	for id, srv := range a.services {
+		result[id] = srv.GetInfo()
 	}
 	return result
 }
 
-// AddService adds a new service
-func (a *App) AddService(config ServiceConfig) *Service {
+// AddService adds a new service to the default group
+func (a *App) AddService(config ServiceConfig) *service.Service {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	id := generateID()
-	service := NewService(id, config, a)
-	a.services[id] = service
-	a.saveServices()
-	return service
+
+	// Find or create default group
+	defaultGroupId := ""
+	groups := a.groups.GetGroups()
+	for id, grp := range groups {
+		if grp.Name == "Default" {
+			defaultGroupId = id
+			break
+		}
+	}
+	if defaultGroupId == "" {
+		defaultGroupId = a.AddGroup("Default", make(ServiceEnv))
+	}
+
+	serviceId := a.AddServiceToGroup(defaultGroupId, config)
+	return a.services[serviceId]
 }
 
 // GetService returns a service by ID
 func (a *App) GetService(id string) *ServiceInfo {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	service, exists := a.services[id]
+	srv, exists := a.services[id]
 	if !exists {
 		return nil
 	}
-	service.mu.RLock()
-	defer service.mu.RUnlock()
-	return &ServiceInfo{
-		Name:   service.Config.Name,
-		Path:   service.Config.Path,
-		Status: service.Status,
-		URL:    service.URL,
-		Logs:   service.Logs,
-		Env:    service.Config.Env,
-	}
+	info := srv.GetInfo()
+	return &info
 }
 
-// UpdateService updates a service
-func (a *App) UpdateService(id string, config ServiceConfig) *Service {
+// UpdateService updates a service (assumes it's in default group for backward compatibility)
+func (a *App) UpdateService(id string, config ServiceConfig) *service.Service {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	service, exists := a.services[id]
-	if !exists {
-		return nil
+
+	// Find the group containing this service
+	if groupId, found := a.groups.FindGroupByService(id); found {
+		a.UpdateServiceInGroup(groupId, id, config)
+		return a.services[id]
 	}
-	service.mu.Lock()
-	service.Config = config
-	service.processManager.UpdateConfig(config.Path, config.Env)
-	service.mu.Unlock()
-	a.saveServices()
-	return service
+	return nil
 }
 
 // StartService starts a service
 func (a *App) StartService(id string) error {
 	a.mu.RLock()
-	service, exists := a.services[id]
+	srv, exists := a.services[id]
 	a.mu.RUnlock()
 	if !exists {
 		return fmt.Errorf("service not found")
 	}
-	return service.processManager.Start()
+	return srv.Start()
 }
 
 // StopService stops a service
 func (a *App) StopService(id string) error {
 	a.mu.RLock()
-	service, exists := a.services[id]
+	srv, exists := a.services[id]
 	a.mu.RUnlock()
 	if !exists {
 		return fmt.Errorf("service not found")
 	}
-	return service.processManager.Stop()
+	return srv.Stop()
 }
 
 // ClearLogs clears logs for a service
 func (a *App) ClearLogs(id string) {
 	a.mu.RLock()
-	service, exists := a.services[id]
+	srv, exists := a.services[id]
 	a.mu.RUnlock()
 	if !exists {
 		return
 	}
-	service.mu.Lock()
-	service.Logs = []LogEntry{}
-	service.mu.Unlock()
+	srv.ClearLogs()
 }
 
 // ReloadServices reloads services from config
 func (a *App) ReloadServices() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Reload config
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	a.config = cfg
+	a.groups = group.NewManager(cfg.Groups)
+
 	// Stop services not in config
-	configs := a.loadConfigs()
-	for id, service := range a.services {
-		if _, exists := configs[id]; !exists {
-			if service.Status == process.Running {
-				service.processManager.Stop()
-			}
+	groupServices := a.groups.GetGroupServices()
+	for id, srv := range a.services {
+		if _, exists := groupServices[id]; !exists {
+			srv.Stop()
 			delete(a.services, id)
 		}
 	}
+
 	// Update or create services
-	for id, config := range configs {
-		if service, exists := a.services[id]; exists {
-			service.mu.Lock()
-			service.Config = config
-			service.processManager.UpdateConfig(config.Path, config.Env)
-			service.mu.Unlock()
+	for id, serviceConfig := range groupServices {
+		if srv, exists := a.services[id]; exists {
+			srv.UpdateConfig(serviceConfig)
 		} else {
-			service := NewService(id, config, a)
-			a.services[id] = service
+			srv := service.NewService(id, serviceConfig, a)
+			a.services[id] = srv
 		}
 	}
 }
 
-// loadConfigs loads configs from file
-func (a *App) loadConfigs() map[string]ServiceConfig {
-	data, err := os.ReadFile("services.json")
+// GetGroups returns all groups
+func (a *App) GetGroups() map[string]config.GroupConfig {
+	return a.groups.GetGroups()
+}
+
+// AddGroup adds a new group
+func (a *App) AddGroup(name string, env config.ServiceEnv) string {
+	groupId := a.groups.AddGroup(name, env)
+	a.saveConfig()
+	return groupId
+}
+
+// UpdateGroup updates a group
+func (a *App) UpdateGroup(id string, name string, env config.ServiceEnv) {
+	a.groups.UpdateGroup(id, name, env)
+	a.saveConfig()
+
+	// Update all services in the group with new merged env
+	groups := a.groups.GetGroups()
+	if grp, exists := groups[id]; exists {
+		for serviceId := range grp.Services {
+			if srv, exists := a.services[serviceId]; exists {
+				groupServices := a.groups.GetGroupServices()
+				if serviceConfig, exists := groupServices[serviceId]; exists {
+					srv.UpdateConfig(serviceConfig)
+				}
+			}
+		}
+	}
+}
+
+// AddServiceToGroup adds a service to a group
+func (a *App) AddServiceToGroup(groupId string, config config.ServiceConfig) string {
+	serviceId := a.groups.AddServiceToGroup(groupId, config)
+	a.saveConfig()
+
+	// Create the service
+	groupServices := a.groups.GetGroupServices()
+	if serviceConfig, exists := groupServices[serviceId]; exists {
+		srv := service.NewService(serviceId, serviceConfig, a)
+		a.services[serviceId] = srv
+	}
+	return serviceId
+}
+
+// UpdateServiceInGroup updates a service in a group
+func (a *App) UpdateServiceInGroup(groupId string, serviceId string, config config.ServiceConfig) {
+	a.groups.UpdateServiceInGroup(groupId, serviceId, config)
+	a.saveConfig()
+
+	// Update the service
+	groupServices := a.groups.GetGroupServices()
+	if serviceConfig, exists := groupServices[serviceId]; exists {
+		if srv, exists := a.services[serviceId]; exists {
+			srv.UpdateConfig(serviceConfig)
+		}
+	}
+}
+
+// ImportSLN imports projects from a .sln file and creates a group
+func (a *App) ImportSLN(slnPath string) error {
+	err := a.groups.ImportSLN(slnPath)
 	if err != nil {
-		return make(map[string]ServiceConfig)
+		return err
 	}
-	var configs map[string]ServiceConfig
-	json.Unmarshal(data, &configs)
-	return configs
+	a.saveConfig()
+
+	// Create services for the new group
+	groupServices := a.groups.GetGroupServices()
+	for serviceId, serviceConfig := range groupServices {
+		if _, exists := a.services[serviceId]; !exists {
+			srv := service.NewService(serviceId, serviceConfig, a)
+			a.services[serviceId] = srv
+		}
+	}
+
+	return nil
 }
 
-// generateID generates a random ID
-func generateID() string {
-	bytes := make([]byte, 16)
-	rand.Read(bytes)
-	return fmt.Sprintf("%x", bytes)
-}
-
-// saveServices saves services to services.json
-func (a *App) saveServices() {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	configs := make(map[string]ServiceConfig)
-	for id, service := range a.services {
-		configs[id] = service.Config
-	}
-	data, _ := json.MarshalIndent(configs, "", "  ")
-	os.WriteFile("services.json", data, 0644)
+// saveConfig saves the configuration
+func (a *App) saveConfig() {
+	a.config.Groups = a.groups.GetGroups()
+	a.config.Save()
 }

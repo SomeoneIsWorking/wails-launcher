@@ -5,6 +5,23 @@
     </h3>
 
     <div class="space-y-4">
+      <div v-if="serviceId === 'new'">
+        <label class="block text-sm font-medium mb-1"> Group </label>
+        <select
+          v-model="selectedGroupId"
+          class="w-full px-3 py-2 border rounded"
+        >
+          <option value="">Select a group</option>
+          <option
+            v-for="(group, id) in store.groups"
+            :key="id"
+            :value="id"
+          >
+            {{ group.name }}
+          </option>
+        </select>
+      </div>
+
       <div>
         <label class="block text-sm font-medium mb-1"> Name </label>
         <input
@@ -23,45 +40,7 @@
         />
       </div>
 
-      <div>
-        <label class="block text-sm font-medium mb-2">
-          Environment Variables
-        </label>
-        <div class="space-y-2">
-          <div v-for="item in form.env" :key="item.index" class="flex gap-2">
-            <input
-              v-model="item.key"
-              placeholder="Key"
-              class="flex-1 px-3 py-2 border rounded"
-            />
-            <input
-              v-model="item.value"
-              placeholder="Value"
-              class="flex-1 px-3 py-2 border rounded"
-            />
-            <button
-              @click="
-                form.env = form.env.filter(({ index }) => index !== item.index)
-              "
-              class="px-2 py-1 text-red-500 hover:bg-red-50 rounded"
-            >
-              <XIcon :size="16" />
-            </button>
-          </div>
-        </div>
-        <button
-          @click="
-            form.env.push({
-              index: (max(form.env.map((x) => x.index)) ?? 0) + 1,
-              key: '',
-              value: '',
-            })
-          "
-          class="mt-2 text-sm text-blue-500 hover:text-blue-600"
-        >
-          + Add Environment Variable
-        </button>
-      </div>
+      <EnvVariables v-model="form.env" />
     </div>
 
     <div class="flex justify-end gap-2 mt-6">
@@ -83,9 +62,9 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { XIcon } from "lucide-vue-next";
-import { map, max } from "lodash-es";
+import { map } from "lodash-es";
 import { useServicesStore } from "@/stores/services";
+import EnvVariables from "./EnvVariables.vue";
 
 const store = useServicesStore();
 
@@ -97,6 +76,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 const form = ref(setup());
+const selectedGroupId = ref("");
 
 function setup() {
   const value = props.serviceId;
@@ -133,9 +113,21 @@ async function save() {
   }
   try {
     if (props.serviceId === "new") {
-      await store.addService(toModel());
+      if (selectedGroupId.value) {
+        await store.addServiceToGroup(selectedGroupId.value, toModel());
+      } else {
+        await store.addService(toModel());
+      }
     } else {
-      await store.updateService(props.serviceId, toModel());
+      // For editing, find the group containing this service
+      const groupId = Object.keys(store.groups).find(id =>
+        Object.keys(store.groups[id].services).includes(props.serviceId)
+      );
+      if (groupId) {
+        await store.updateServiceInGroup(groupId, props.serviceId, toModel());
+      } else {
+        await store.updateService(props.serviceId, toModel());
+      }
     }
     emit("close");
   } catch (error) {

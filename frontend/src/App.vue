@@ -16,7 +16,7 @@ const store = useServicesStore();
 // Load services on mount
 onMounted(async () => {
   if (Object.entries(store.services).length === 0) {
-    await store.loadServices();
+    await store.loadAll();
     if (Object.keys(store.services).length > 0) {
       store.selectService(Object.keys(store.services)[0]);
     }

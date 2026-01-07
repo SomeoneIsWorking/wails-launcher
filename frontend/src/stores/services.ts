@@ -1,10 +1,9 @@
 import { ref, computed, onMounted } from 'vue'
-import { mapValues } from "lodash-es";
 import { defineStore } from "pinia";
 import { MAX_LOGS } from "@/constants";
 import type { ServiceConfig, ServiceInfo } from "@/types/service";
-import type { ClientServiceInfo, ClientLogEntry, ScrollPosition } from "@/types/client";
-import { GetServices, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices } from '../../wailsjs/go/main/App.js'
+import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
+import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 
 function parseReadLogs(serviceName: string): Set<string> {
@@ -14,19 +13,50 @@ function parseReadLogs(serviceName: string): Set<string> {
 
 export const useServicesStore = defineStore("services", () => {
   const services = ref<Record<string, ClientServiceInfo>>({});
+  const groups = ref<Record<string, ClientGroupInfo>>({});
   const selectedServiceId = ref<string | null>(null);
+  const selectedGroupId = ref<string | null>(null);
   const scrollPositions = ref<Record<string, ScrollPosition | undefined>>({});
   const selectedService = computed(() =>
     selectedServiceId.value ? services.value[selectedServiceId.value] : null
+  );
+  const selectedGroup = computed(() =>
+    selectedGroupId.value ? groups.value[selectedGroupId.value] : null
   );
   const readLogs = ref<Record<string, Set<string>>>({});
 
   function mapToClientServiceInfo(service: ServiceInfo): ClientServiceInfo {
     return {
       ...service,
-      logs: service.logs.map((log) => ({ ...log, read: false })),
+      logs: service.logs.map((log: any) => ({ ...log, read: false })),
       unreadErrors: 0,
     };
+  }
+
+  async function loadAll() {
+    const newServices = await GetServices();
+    const mappedServices: Record<string, ClientServiceInfo> = {};
+    for (const [id, service] of Object.entries(newServices)) {
+      mappedServices[id] = mapToClientServiceInfo(service);
+    }
+    services.value = mappedServices;
+
+    const newGroups = await GetGroups();
+    const mappedGroups: Record<string, ClientGroupInfo> = {};
+    for (const [id, group] of Object.entries(newGroups)) {
+      const groupServices: Record<string, ClientServiceInfo> = {};
+      for (const serviceId of Object.keys(group.services)) {
+        if (mappedServices[serviceId]) {
+          groupServices[serviceId] = mappedServices[serviceId];
+        }
+      }
+      mappedGroups[id] = {
+        name: group.name,
+        env: group.env,
+        services: groupServices,
+      };
+    }
+    groups.value = mappedGroups;
   }
 
   function isLogRead(id: string, timestamp: string) {
@@ -55,16 +85,29 @@ export const useServicesStore = defineStore("services", () => {
     ).length;
   }
 
-  async function loadServices() {
-    const newServices = await GetServices();
-    addServices(newServices);
+  async function addGroup(name: string, env: Record<string, string>) {
+    await AddGroup(name, env);
+    await loadAll();
   }
 
-  function addServices(newServices: Record<string, ServiceInfo>) {
-    services.value = {
-      ...services.value,
-      ...mapValues(newServices, mapToClientServiceInfo),
-    };
+  async function updateGroup(id: string, name: string, env: Record<string, string>) {
+    await UpdateGroup(id, name, env);
+    await loadAll();
+  }
+
+  async function addServiceToGroup(groupId: string, config: ServiceConfig) {
+    await AddServiceToGroup(groupId, config);
+    await loadAll();
+  }
+
+  async function updateServiceInGroup(groupId: string, serviceId: string, config: ServiceConfig) {
+    await UpdateServiceInGroup(groupId, serviceId, config);
+    await loadAll();
+  }
+
+  async function importSLN(slnPath: string) {
+    await ImportSLN(slnPath);
+    await loadAll();
   }
 
   async function addService(config: ServiceConfig) {
@@ -179,7 +222,7 @@ export const useServicesStore = defineStore("services", () => {
 
   onMounted(async () => {
     setupEvents();
-    await loadServices();
+    await loadAll();
   });
 
   async function clearLogs(id: string) {
@@ -189,7 +232,7 @@ export const useServicesStore = defineStore("services", () => {
 
   async function reloadConfig() {
     await ReloadServices();
-    await loadServices();
+    await loadAll();
   }
 
   function saveScrollPosition(serviceId: string, position: ScrollPosition | undefined) {
@@ -202,21 +245,28 @@ export const useServicesStore = defineStore("services", () => {
 
   return {
     services,
+    groups,
     selectedService,
     selectedServiceId,
+    selectedGroup,
+    selectedGroupId,
     startService,
     stopService,
     restartService,
     selectService,
-    addServices,
     isLogRead,
     markLogAsRead,
     getUnreadErrorCount,
     addService,
     updateService,
+    addGroup,
+    updateGroup,
+    addServiceToGroup,
+    updateServiceInGroup,
+    importSLN,
     clearLogs,
     reloadConfig,
-    loadServices,
+    loadAll,
     saveScrollPosition,
     getScrollPosition,
   };

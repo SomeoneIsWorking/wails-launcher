@@ -13,3 +13,9 @@ export interface ScrollPosition {
   topIndex: number;
   offset: number;
 }
+
+export interface ClientGroupInfo {
+  name: string;
+  env: Record<string, string>;
+  services: Record<string, ClientServiceInfo>;
+}
