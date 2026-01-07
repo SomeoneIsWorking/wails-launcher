@@ -203,7 +203,6 @@ func (ds *DotnetService) spawn() *exec.Cmd {
 	for k, v := range ds.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	cmd.Env = append(cmd.Env, "DOTNET_ENVIRONMENT=Development")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil
