@@ -18,6 +18,10 @@ export function ClearLogs(arg1) {
   return window['go']['main']['App']['ClearLogs'](arg1);
 }
 
+export function DeleteService(arg1) {
+  return window['go']['main']['App']['DeleteService'](arg1);
+}
+
 export function EmitToFrontend(arg1, arg2, arg3) {
   return window['go']['main']['App']['EmitToFrontend'](arg1, arg2, arg3);
 }
@@ -40,6 +44,10 @@ export function ImportSLN(arg1) {
 
 export function ReloadServices() {
   return window['go']['main']['App']['ReloadServices']();
+}
+
+export function StartGroup(arg1) {
+  return window['go']['main']['App']['StartGroup'](arg1);
 }
 
 export function StartService(arg1) {

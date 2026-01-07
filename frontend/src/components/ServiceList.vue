@@ -6,7 +6,8 @@
         :key="groupId"
         class="mb-4"
       >
-        <div class="px-4 py-2 bg-gray-200 font-semibold text-gray-800 flex items-center justify-between">
+        <div class="px-4 py-2 bg-gray-200 font-semibold text-gray-800 flex items-center justify-between"
+             @contextmenu.prevent="showGroupContextMenu($event, groupId)">
           <span>{{ group.name }}</span>
           <button
             @click.stop="editGroup(groupId)"
@@ -19,6 +20,7 @@
           v-for="(service, serviceId) in group.services"
           :key="serviceId"
           @click="store.selectService(serviceId)"
+          @contextmenu.prevent="showServiceContextMenu($event, serviceId, service)"
           :class="[
             'p-4 pl-8',
             selectedService === service
@@ -176,6 +178,24 @@
         </div>
       </div>
     </div>
+
+    <!-- Context Menu -->
+    <div
+      v-if="contextMenu.visible"
+      class="fixed bg-white border border-gray-300 rounded shadow-lg z-50"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @click.stop
+    >
+      <div
+        v-for="option in contextMenu.options"
+        :key="option.label"
+        @click="option.action"
+        class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+        :class="{ 'text-gray-400 cursor-not-allowed': option.disabled }"
+      >
+        {{ option.label }}
+      </div>
+    </div>
   </div>
 </template>
 
@@ -209,6 +229,13 @@ const editingGroupId = ref<string>();
 const importSLNDialog = ref(false);
 const slnPath = ref("");
 
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  options: [] as { label: string; action: () => void; disabled?: boolean }[],
+});
+
 function editService(id: string) {
   editingServiceId.value = id;
 }
@@ -228,4 +255,49 @@ async function importSLN() {
     }
   }
 }
+
+function showGroupContextMenu(event: MouseEvent, groupId: string) {
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    options: [
+      {
+        label: "Launch Group",
+        action: () => {
+          store.startGroup(groupId);
+          hideContextMenu();
+        },
+      },
+    ],
+  };
+}
+
+function showServiceContextMenu(event: MouseEvent, serviceId: string, service: any) {
+  const options = [];
+  if (service.status === 'stopped') {
+    options.push({
+      label: "Delete Service",
+      action: async () => {
+        await store.deleteService(serviceId);
+        hideContextMenu();
+      },
+    });
+  }
+  if (options.length > 0) {
+    contextMenu.value = {
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      options,
+    };
+  }
+}
+
+function hideContextMenu() {
+  contextMenu.value.visible = false;
+}
+
+// Hide context menu on click outside
+document.addEventListener('click', hideContextMenu);
 </script>

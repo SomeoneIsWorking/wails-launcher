@@ -87,6 +87,18 @@ func (m *Manager) UpdateServiceInGroup(groupId string, serviceId string, service
 	}
 }
 
+// DeleteServiceFromGroup deletes a service from a group
+func (m *Manager) DeleteServiceFromGroup(groupId string, serviceId string) bool {
+	if group, exists := m.groups[groupId]; exists {
+		if _, sExists := group.Services[serviceId]; sExists {
+			delete(group.Services, serviceId)
+			m.groups[groupId] = group
+			return true
+		}
+	}
+	return false
+}
+
 // ImportSLN imports projects from a .sln file and creates a group
 func (m *Manager) ImportSLN(slnPath string) error {
 	file, err := os.Open(slnPath)

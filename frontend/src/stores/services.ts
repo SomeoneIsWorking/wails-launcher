@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { MAX_LOGS } from "@/constants";
 import type { ServiceConfig, ServiceInfo } from "@/types/service";
 import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
-import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices } from '../../wailsjs/go/main/App.js'
+import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 
 function parseReadLogs(serviceName: string): Set<string> {
@@ -235,6 +235,15 @@ export const useServicesStore = defineStore("services", () => {
     await loadAll();
   }
 
+  async function deleteService(serviceId: string) {
+    await DeleteService(serviceId);
+    await loadAll();
+  }
+
+  async function startGroup(groupId: string) {
+    await StartGroup(groupId);
+  }
+
   function saveScrollPosition(serviceId: string, position: ScrollPosition | undefined) {
     scrollPositions.value[serviceId] = position;
   }
@@ -266,6 +275,8 @@ export const useServicesStore = defineStore("services", () => {
     importSLN,
     clearLogs,
     reloadConfig,
+    deleteService,
+    startGroup,
     loadAll,
     saveScrollPosition,
     getScrollPosition,

@@ -287,6 +287,39 @@ func (a *App) ImportSLN(slnPath string) error {
 	return nil
 }
 
+// DeleteService deletes a service
+func (a *App) DeleteService(serviceId string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	// Stop the service if running
+	if srv, exists := a.services[serviceId]; exists {
+		srv.Stop()
+		delete(a.services, serviceId)
+	}
+
+	// Find the group and remove from it
+	if groupId, found := a.groups.FindGroupByService(serviceId); found {
+		a.groups.DeleteServiceFromGroup(groupId, serviceId)
+		a.saveConfig()
+		return nil
+	}
+
+	return fmt.Errorf("service not found")
+}
+
+// StartGroup starts all services in a group
+func (a *App) StartGroup(groupId string) {
+	groups := a.groups.GetGroups()
+	if group, exists := groups[groupId]; exists {
+		for serviceId := range group.Services {
+			go func(id string) {
+				a.StartService(id)
+			}(serviceId)
+		}
+	}
+}
+
 // saveConfig saves the configuration
 func (a *App) saveConfig() {
 	a.config.Groups = a.groups.GetGroups()

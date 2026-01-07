@@ -12,6 +12,8 @@ export function AddServiceToGroup(arg1:string,arg2:config.ServiceConfig):Promise
 
 export function ClearLogs(arg1:string):Promise<void>;
 
+export function DeleteService(arg1:string):Promise<void>;
+
 export function EmitToFrontend(arg1:string,arg2:string,arg3:any):Promise<void>;
 
 export function GetGroups():Promise<Record<string, config.GroupConfig>>;
@@ -23,6 +25,8 @@ export function GetServices():Promise<Record<string, service.ServiceInfo>>;
 export function ImportSLN(arg1:string):Promise<void>;
 
 export function ReloadServices():Promise<void>;
+
+export function StartGroup(arg1:string):Promise<void>;
 
 export function StartService(arg1:string):Promise<void>;
 
