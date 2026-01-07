@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"wails-launcher/pkg/bridge"
 	"wails-launcher/pkg/executablesearch"
 	"wails-launcher/pkg/processsearch"
 )
@@ -71,6 +72,13 @@ func (ds *DotnetService) Stop() error {
 		return nil
 	}
 	ds.emitStatus(Stopping)
+
+	// Send interrupt signal to bridge to allow it to kill children
+	ds.process.Process.Signal(os.Interrupt)
+
+	// Give it a moment to cleanup
+	time.Sleep(500 * time.Millisecond)
+
 	err := ds.process.Process.Kill()
 	if err != nil {
 		return err
@@ -176,12 +184,17 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 		return nil, fmt.Errorf("dotnet not found: %v", err)
 	}
 	ds.emitLog(Inf, fmt.Sprintf("Using dotnet at: %s", dotnetPath), "")
-	cmd := exec.Command(dotnetPath, "run")
-	cmd.Dir = ds.path
-	cmd.Env = os.Environ()
+
+	env := os.Environ()
 	for k, v := range ds.env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		env = append(env, k+"="+v)
 	}
+
+	cmd, err := bridge.CreateCommand([]string{dotnetPath, "run"}, env, ds.path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bridge command: %v", err)
+	}
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
