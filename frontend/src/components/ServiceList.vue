@@ -113,9 +113,10 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { useServicesStore } from "~/stores/services";
+import { useServicesStore } from "@/stores/services";
 import { ref } from "vue";
 import { SettingsIcon, RefreshCwIcon, PlayIcon, SquareIcon, RotateCwIcon } from "lucide-vue-next";
+import ServiceConfig from "./ServiceConfig.vue";
 
 const store = useServicesStore();
 const { services, selectedService } = storeToRefs(store);

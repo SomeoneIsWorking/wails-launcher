@@ -48,7 +48,7 @@
       @scroll="handleScroll"
       @ready="handleVirtualScrollerReady"
     >
-      <template #default="{ item: log, index }">
+      <template #default="{ item: log, index: _index }">
         <LogEntry :log="log" :service-name="service.name" />
       </template>
     </VirtualScroller>
@@ -65,9 +65,11 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, watch, onBeforeUnmount } from "vue";
 import { ChevronUp, ChevronDown } from "lucide-vue-next";
+import { useServicesStore } from "@/stores/services";
 import type { ComponentInstance } from "vue";
 import VirtualScroller from "./VirtualScroller.vue";
-import type { ScrollPosition } from "~/types/client";
+import type { ScrollPosition } from "@/types/client";
+import LogEntry from "./LogEntry.vue";
 
 const props = defineProps<{
   serviceId: string;
@@ -80,8 +82,8 @@ const currentOrPreviousErrorIndex = ref(-1);
 
 const errors = computed(() =>
   service.value.logs
-    .map((log, index) => ({ ...log, elementIndex: index }))
-    .filter(({ level }) => level === "ERR")
+    .map((log: any, index: number) => ({ ...log, elementIndex: index }))
+    .filter(({ level }: any) => level === "ERR")
 );
 
 const errorsAbove = ref<typeof errors.value>([]);
@@ -94,15 +96,15 @@ const updateErrorNavigation = () => {
   if (!range) return;
 
   errorsAbove.value = errors.value.filter(
-    error => error.elementIndex < range.start
+    (error: any) => error.elementIndex < range.start
   );
   
   errorsBelow.value = errors.value.filter(
-    error => error.elementIndex > range.end
+    (error: any) => error.elementIndex > range.end
   );
 
   currentOrPreviousErrorIndex.value = errors.value.findIndex(
-    error => error.elementIndex <= range.end && error.elementIndex >= range.start
+    (error: any) => error.elementIndex <= range.end && error.elementIndex >= range.start
   );
 };
 
@@ -110,7 +112,7 @@ const filteredLogs = computed(() => {
   if (!searchQuery.value) return service.value.logs;
   
   const query = searchQuery.value.toLowerCase();
-  return service.value.logs.filter(log => 
+  return service.value.logs.filter((log: any) => 
     log.message.toLowerCase().includes(query) ||
     log.level.toLowerCase().includes(query) ||
     log.timestamp.toLowerCase().includes(query)
@@ -118,7 +120,7 @@ const filteredLogs = computed(() => {
 });
 
 const handleScroll = ({
-  scrollTop,
+  scrollTop: _scrollTop,
   isAtBottom,
 }: {
   scrollTop: number;

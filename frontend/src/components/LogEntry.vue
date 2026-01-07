@@ -27,8 +27,10 @@
 </template>
 
 <script setup lang="ts">
-import { useServicesStore } from "~/stores/services";
-import type { ClientLogEntry } from "~/types/client";
+import { computed } from 'vue'
+import { useServicesStore } from "@/stores/services";
+import type { ClientLogEntry } from "@/types/client";
+import VIntersectionObserver from './VIntersectionObserver.vue';
 
 const props = defineProps<{
   log: ClientLogEntry;

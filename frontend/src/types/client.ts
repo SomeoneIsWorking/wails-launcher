@@ -1,4 +1,4 @@
-import type { LogEntry as ServerLogEntry, ServiceInfo as ServerServiceInfo } from '~/server/types'
+import type { LogEntry as ServerLogEntry, ServiceInfo as ServerServiceInfo } from './service'
 
 export interface ClientLogEntry extends ServerLogEntry {
   read?: boolean

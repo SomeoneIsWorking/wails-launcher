@@ -9,8 +9,9 @@
 </template>
 
 <script setup lang="ts">
-import { useServicesStore } from "~/stores/services";
+import { useServicesStore } from "@/stores/services";
 import { storeToRefs } from "pinia";
+import ServiceLogViewer from "./ServiceLogViewer.vue";
 
 const store = useServicesStore();
 const { selectedService, selectedServiceId } = storeToRefs(store);

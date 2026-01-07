@@ -1,89 +1,19 @@
-# Nuxt Launcher
+# README
 
-A web-based service launcher and log viewer built with Nuxt.js.
+## About
 
-## Features
+This is the official Wails Vue template.
 
-- Launch and manage multiple services from a single interface
-- Real-time service status monitoring
-- Live log viewing with error tracking
-- WebSocket-based communication for instant updates
-- Track read/unread error logs
-- Persistent log read status
+You can configure the project by editing `wails.json`. More information about the project settings can be found
+here: https://wails.io/docs/reference/project-config
 
-## Technical Stack
+## Live Development
 
-- [Nuxt.js](https://nuxt.com/)
-- [Pinia](https://pinia.vuejs.org/) for state management
-- [TailwindCSS](https://tailwindcss.com/) for styling
-- WebSocket for real-time updates
+To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
+server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
+and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
+to this in your browser, and you can call your Go code from devtools.
 
-## Development
+## Building
 
-1. Install dependencies:
-
-```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-2. Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+To build a redistributable, production mode package, use `wails build`.

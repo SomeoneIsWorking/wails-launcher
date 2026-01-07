@@ -1,9 +1,11 @@
+import { ref, computed, onMounted } from 'vue'
 import { mapValues } from "lodash-es";
 import { defineStore } from "pinia";
-import { MAX_LOGS } from '~/constants';
-import type { ServiceConfig } from "~/server/Service";
-import type { ServiceInfo, WebSocketMessage } from "~/server/types";
-import type { ClientServiceInfo, ClientLogEntry, ScrollPosition } from "~/types/client";
+import { MAX_LOGS } from "@/constants";
+import type { ServiceConfig, ServiceInfo } from "@/types/service";
+import type { ClientServiceInfo, ClientLogEntry, ScrollPosition } from "@/types/client";
+import { GetServices, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices } from '../../wailsjs/go/main/App.js'
+import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 
 function parseReadLogs(serviceName: string): Set<string> {
   const stored = localStorage.getItem(`readLogs_${serviceName}`);
@@ -17,22 +19,21 @@ export const useServicesStore = defineStore("services", () => {
   const selectedService = computed(() =>
     selectedServiceId.value ? services.value[selectedServiceId.value] : null
   );
-  const ws = ref<WebSocket>();
   const readLogs = ref<Record<string, Set<string>>>({});
+
+  function mapToClientServiceInfo(service: ServiceInfo): ClientServiceInfo {
+    return {
+      ...service,
+      logs: service.logs.map((log) => ({ ...log, read: false })),
+      unreadErrors: 0,
+    };
+  }
 
   function isLogRead(id: string, timestamp: string) {
     if (!readLogs.value[id]) {
       readLogs.value[id] = parseReadLogs(id);
     }
     return readLogs.value[id].has(timestamp);
-  }
-
-  function getUnreadErrorCount(id: string) {
-    const service = services.value[id];
-    if (!service) return 0;
-    return service.logs.filter(
-      (log) => log.level === "ERR" && !isLogRead(id, log.timestamp)
-    ).length;
   }
 
   function markLogAsRead(serviceName: string, timestamp: string) {
@@ -46,12 +47,17 @@ export const useServicesStore = defineStore("services", () => {
     );
   }
 
-  function mapToClientServiceInfo(service: ServiceInfo): ClientServiceInfo {
-    return {
-      ...service,
-      logs: service.logs.map((log) => ({ ...log, read: false })),
-      unreadErrors: 0,
-    };
+  function getUnreadErrorCount(id: string) {
+    const service = services.value[id];
+    if (!service) return 0;
+    return service.logs.filter(
+      (log) => log.level === "ERR" && !isLogRead(id, log.timestamp)
+    ).length;
+  }
+
+  async function loadServices() {
+    const newServices = await GetServices();
+    addServices(newServices);
   }
 
   function addServices(newServices: Record<string, ServiceInfo>) {
@@ -62,12 +68,16 @@ export const useServicesStore = defineStore("services", () => {
   }
 
   async function addService(config: ServiceConfig) {
-    const { id, service } = await $fetch("/api/services", {
-      method: "POST",
-      body: config,
+    const service = await AddService(config);
+    const id = service.ID;
+    const clientService = mapToClientServiceInfo({
+      name: service.Config.name,
+      path: service.Config.path,
+      status: service.Status,
+      url: service.URL,
+      logs: service.Logs,
+      env: service.Config.env,
     });
-
-    const clientService = mapToClientServiceInfo(service);
     services.value[id] = clientService;
     if (!selectedService.value) {
       selectService(id);
@@ -75,25 +85,19 @@ export const useServicesStore = defineStore("services", () => {
   }
 
   async function updateService(id: string, config: ServiceConfig) {
-    const { service } = await $fetch<{
-      service: ServiceInfo;
-    }>(`/api/services/${id}`, {
-      method: "PATCH",
-      body: config,
-    });
-
+    await UpdateService(id, config);
+    // Update local
     services.value[id] = {
-      ...service,
-      logs: services.value[id].logs,
+      ...services.value[id],
+      name: config.name,
+      path: config.path,
+      env: config.env,
     };
   }
 
-  function setupWebSocket() {
-    ws.value = new WebSocket(`ws://${window.location.host}/api/socket`);
-
-    ws.value.onmessage = (event) => {
-      const msg = JSON.parse(event.data) as WebSocketMessage;
-
+  function setupEvents() {
+    EventsOn("serviceEvent", (event: any) => {
+      const msg = event;
       switch (msg.type) {
         case "statusUpdate": {
           const service = services.value[msg.serviceId];
@@ -117,12 +121,7 @@ export const useServicesStore = defineStore("services", () => {
           break;
         }
       }
-    };
-
-    ws.value.onclose = () => {
-      console.log("WebSocket connection closed, reconnecting...");
-      setTimeout(setupWebSocket, 1000);
-    };
+    });
   }
 
   async function startService(id: string) {
@@ -132,9 +131,7 @@ export const useServicesStore = defineStore("services", () => {
     }
 
     try {
-      await $fetch(`/api/services/${id}/start`, {
-        method: "POST",
-      });
+      await StartService(id);
     } catch (error) {
       if (serviceRef) {
         serviceRef.status = "error";
@@ -151,9 +148,7 @@ export const useServicesStore = defineStore("services", () => {
     serviceRef.status = "stopping";
 
     try {
-      await $fetch(`/api/services/${id}/stop`, {
-        method: "POST",
-      });
+      await StopService(id);
     } catch (error) {
       serviceRef.status = "error";
       console.error("Failed to stop service:", error);
@@ -182,22 +177,19 @@ export const useServicesStore = defineStore("services", () => {
     selectedServiceId.value = id;
   }
 
-  onMounted(() => {
-    setupWebSocket();
+  onMounted(async () => {
+    setupEvents();
+    await loadServices();
   });
 
   async function clearLogs(id: string) {
-    await $fetch(`/api/services/${id}/clear-logs`, {
-      method: "POST",
-    });
+    await ClearLogs(id);
     services.value[id].logs = [];
   }
 
   async function reloadConfig() {
-    const reloadedServices = await $fetch("/api/services/reload", {
-      method: "POST",
-    });
-    addServices(reloadedServices);
+    await ReloadServices();
+    await loadServices();
   }
 
   function saveScrollPosition(serviceId: string, position: ScrollPosition | undefined) {
@@ -224,7 +216,9 @@ export const useServicesStore = defineStore("services", () => {
     updateService,
     clearLogs,
     reloadConfig,
+    loadServices,
     saveScrollPosition,
     getScrollPosition,
   };
 });
+

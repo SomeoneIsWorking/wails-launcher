@@ -74,7 +74,7 @@ export class Service {
     }
   }
 
-  setUrl(url: string) {
+  setUrl(url: string | undefined) {
     this.url = url;
     this.broadcastStatus();
   }
@@ -88,6 +88,10 @@ export class Service {
   };
 
   private handleStatus = (status: ServiceStatus) => {
+    // Clear URL when service is stopped or in error state
+    if (status === "stopped" || status === "error") {
+      this.setUrl(undefined);
+    }
     this.setStatus(status);
   };
 

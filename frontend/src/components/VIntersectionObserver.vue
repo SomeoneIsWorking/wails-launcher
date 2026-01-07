@@ -5,6 +5,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+
 const props = defineProps<{
   threshold?: number;
 }>();

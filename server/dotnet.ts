@@ -216,15 +216,26 @@ export class DotnetService extends EventEmitter implements IProcessManager {
       return;
     }
 
+    // Create a promise that resolves when the process actually closes
+    const processClosePromise = new Promise<void>((resolve) => {
+      this.currentProcess?.once('close', resolve);
+    });
+
     // First try to gracefully stop the process
     this.currentProcess.kill('SIGTERM');
     
-    // Wait for 5 seconds to see if the process stops naturally
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Wait for either the process to close naturally or timeout after 3 seconds
+    const timeoutPromise = new Promise<void>((resolve) => {
+      setTimeout(resolve, 3000);
+    });
+
+    await Promise.race([processClosePromise, timeoutPromise]);
     
-    // If process is still running, force kill it
+    // If process is still running after timeout, force kill it and wait for it to close
     if (this.currentProcess) {
       await this.killProcess(this.currentProcess.pid!.toString());
+      // Wait for the process to actually close after force kill
+      await processClosePromise;
     }
   }
 }

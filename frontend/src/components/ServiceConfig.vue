@@ -82,10 +82,10 @@
 </template>
 
 <script setup lang="ts">
-import { XIcon } from "lucide-vue-next";
-import type { ServiceConfig } from "~/server/Service";
 import { ref } from "vue";
+import { XIcon } from "lucide-vue-next";
 import { map, max } from "lodash-es";
+import { useServicesStore } from "@/stores/services";
 
 const store = useServicesStore();
 

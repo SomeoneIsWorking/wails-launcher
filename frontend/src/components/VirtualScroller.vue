@@ -34,6 +34,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from "vue";
+import VirtualScrollerItem from "./VirtualScrollerItem.vue";
 
 const props = defineProps<{
   items: any[];

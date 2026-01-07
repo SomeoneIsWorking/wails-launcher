@@ -23,5 +23,7 @@ logs
 .env.*
 !.env.example
 
+build/bin/
+
 # ...existing code...
 services.json
