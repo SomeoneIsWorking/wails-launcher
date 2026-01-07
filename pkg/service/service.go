@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"nuxt-launcher/pkg/config"
-	"nuxt-launcher/pkg/process"
+	"wails-launcher/pkg/config"
+	"wails-launcher/pkg/process"
 )
 
 // ServiceInfo represents service information

@@ -1,4 +1,4 @@
-module nuxt-launcher
+module wails-launcher
 
 go 1.23
 

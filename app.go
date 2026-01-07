@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	"nuxt-launcher/pkg/config"
-	"nuxt-launcher/pkg/group"
-	"nuxt-launcher/pkg/process"
-	"nuxt-launcher/pkg/service"
+	"wails-launcher/pkg/config"
+	"wails-launcher/pkg/group"
+	"wails-launcher/pkg/process"
+	"wails-launcher/pkg/service"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

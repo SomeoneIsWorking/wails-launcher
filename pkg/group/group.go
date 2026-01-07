@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"nuxt-launcher/pkg/config"
-	"nuxt-launcher/pkg/service"
+	"wails-launcher/pkg/config"
+	"wails-launcher/pkg/service"
 )
 
 // Manager handles group operations

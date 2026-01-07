@@ -3,8 +3,9 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 
-	"nuxt-launcher/pkg/process"
+	"wails-launcher/pkg/process"
 )
 
 // ServiceEnv represents environment variables
@@ -29,14 +30,46 @@ type Config struct {
 	Groups map[string]GroupConfig `json:"groups"`
 }
 
+// getConfigPath returns the path to the services.json file
+func getConfigPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "wails-launcher", "services.json"), nil
+}
+
 // Load loads configuration from services.json
 func Load() (*Config, error) {
-	data, err := os.ReadFile("services.json")
+	configPath, err := getConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Config{Groups: make(map[string]GroupConfig)}, nil
+			// Try to migrate from old location
+			oldData, oldErr := os.ReadFile("services.json")
+			if oldErr == nil {
+				// Create directory and copy file
+				dir := filepath.Dir(configPath)
+				if mkdirErr := os.MkdirAll(dir, 0755); mkdirErr != nil {
+					return nil, mkdirErr
+				}
+				if writeErr := os.WriteFile(configPath, oldData, 0644); writeErr != nil {
+					return nil, writeErr
+				}
+				data = oldData
+			} else {
+				// Create directory if needed
+				dir := filepath.Dir(configPath)
+				os.MkdirAll(dir, 0755)
+				return &Config{Groups: make(map[string]GroupConfig)}, nil
+			}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	var config Config
@@ -57,7 +90,15 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile("services.json", data, 0644)
+	configPath, err := getConfigPath()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, data, 0644)
 }
 
 // MigrateFromOldFormat migrates old flat service format to new grouped format
