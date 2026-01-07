@@ -14,6 +14,10 @@ export function AddServiceToGroup(arg1, arg2) {
   return window['go']['main']['App']['AddServiceToGroup'](arg1, arg2);
 }
 
+export function Browse() {
+  return window['go']['main']['App']['Browse']();
+}
+
 export function ClearLogs(arg1) {
   return window['go']['main']['App']['ClearLogs'](arg1);
 }

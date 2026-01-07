@@ -28,6 +28,7 @@ type LogEntry struct {
 	Level     LogLevel `json:"level"`
 	Message   string   `json:"message"`
 	Raw       string   `json:"raw"`
+	Stream    string   `json:"stream"` // "stdout" or "stderr"
 }
 
 // ServiceEnv represents environment variables

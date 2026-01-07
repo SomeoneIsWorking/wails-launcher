@@ -55,7 +55,7 @@ func (ds *DotnetService) Start() error {
 	}
 	cmd, err := ds.spawn()
 	if err != nil {
-		ds.emitLog(Err, fmt.Sprintf("Failed to spawn process: %v", err), "")
+		ds.emitLog(Err, fmt.Sprintf("Failed to spawn process: %v", err), "", "stdout")
 		ds.emitStatus(Error)
 		return err
 	}
@@ -95,12 +95,13 @@ func (ds *DotnetService) GetChannels() (<-chan LogEntry, <-chan string, <-chan S
 }
 
 // emitLog emits a log entry
-func (ds *DotnetService) emitLog(level LogLevel, message, raw string) {
+func (ds *DotnetService) emitLog(level LogLevel, message, raw string, stream string) {
 	entry := LogEntry{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Level:     level,
 		Message:   message,
 		Raw:       raw,
+		Stream:    stream,
 	}
 	select {
 	case ds.logChan <- entry:
@@ -128,15 +129,15 @@ func (ds *DotnetService) emitStatus(status ServiceStatus) {
 func (ds *DotnetService) cleanup() error {
 	runningProcesses, err := ds.findProcess()
 	if err != nil {
-		ds.emitLog(Err, fmt.Sprintf("Process search error: %v", err), "")
+		ds.emitLog(Err, fmt.Sprintf("Process search error: %v", err), "", "stdout")
 		return err
 	}
 
 	for _, proc := range runningProcesses {
-		ds.emitLog(Inf, fmt.Sprintf("Killing process %s (%s)", proc.PID, proc.Cmd), "")
+		ds.emitLog(Inf, fmt.Sprintf("Killing process %s (%s)", proc.PID, proc.Cmd), "", "stdout")
 		err := ds.killProcess(proc.PID)
 		if err != nil {
-			ds.emitLog(Err, fmt.Sprintf("Failed to kill process %s: %v", proc.PID, err), "")
+			ds.emitLog(Err, fmt.Sprintf("Failed to kill process %s: %v", proc.PID, err), "", "stdout")
 		}
 	}
 	return nil
@@ -164,7 +165,7 @@ func (ds *DotnetService) killProcess(pid string) error {
 	err = cmd.Run()
 	if err != nil {
 		// Process is gone
-		ds.emitLog(Inf, fmt.Sprintf("Process %s terminated gracefully", pid), "")
+		ds.emitLog(Inf, fmt.Sprintf("Process %s terminated gracefully", pid), "", "stdout")
 		return nil
 	}
 
@@ -183,7 +184,7 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dotnet not found: %v", err)
 	}
-	ds.emitLog(Inf, fmt.Sprintf("Using dotnet at: %s", dotnetPath), "")
+	ds.emitLog(Inf, fmt.Sprintf("Using dotnet at: %s", dotnetPath), "", "stdout")
 
 	env := os.Environ()
 	for k, v := range ds.env {
@@ -207,22 +208,22 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	go ds.readOutput(stdout)
-	go ds.readOutput(stderr)
+	go ds.readOutput(stdout, "stdout")
+	go ds.readOutput(stderr, "stderr")
 	return cmd, nil
 }
 
 // readOutput reads from pipe
-func (ds *DotnetService) readOutput(pipe io.ReadCloser) {
+func (ds *DotnetService) readOutput(pipe io.ReadCloser, stream string) {
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		line := scanner.Text()
-		ds.processLine(line)
+		ds.processLine(line, stream)
 	}
 }
 
 // processLine processes a line of output
-func (ds *DotnetService) processLine(line string) {
+func (ds *DotnetService) processLine(line string, stream string) {
 	// Check for URL
 	if strings.Contains(line, "Now listening on") {
 		// Extract URL
@@ -233,14 +234,14 @@ func (ds *DotnetService) processLine(line string) {
 		}
 	}
 	// Parse log
-	entry := ds.parseLog(line)
+	entry := ds.parseLog(line, stream)
 	if entry != nil {
-		ds.emitLog(entry.Level, entry.Message, entry.Raw)
+		ds.emitLog(entry.Level, entry.Message, entry.Raw, entry.Stream)
 	}
 }
 
 // parseLog parses a log line
-func (ds *DotnetService) parseLog(line string) *LogEntry {
+func (ds *DotnetService) parseLog(line string, stream string) *LogEntry {
 	if strings.Contains(line, "NETSDK1138") {
 		return nil
 	}
@@ -252,13 +253,21 @@ func (ds *DotnetService) parseLog(line string) *LogEntry {
 			Level:     LogLevel(matches[2]),
 			Message:   matches[3],
 			Raw:       line,
+			Stream:    stream,
 		}
 	}
+
+	level := Inf
+	if stream == "stderr" {
+		level = Err
+	}
+
 	return &LogEntry{
 		Timestamp: time.Now().Format(time.RFC3339),
-		Level:     Inf,
+		Level:     level,
 		Message:   line,
 		Raw:       line,
+		Stream:    stream,
 	}
 }
 

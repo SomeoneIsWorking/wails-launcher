@@ -287,6 +287,19 @@ func (a *App) ImportSLN(slnPath string) error {
 	return nil
 }
 
+// Browse opens a file dialog and returns the selected path
+func (a *App) Browse() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select .sln file",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Solution Files (*.sln)",
+				Pattern:     "*.sln",
+			},
+		},
+	})
+}
+
 // DeleteService deletes a service
 func (a *App) DeleteService(serviceId string) error {
 	a.mu.Lock()

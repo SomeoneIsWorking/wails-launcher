@@ -99,32 +99,40 @@
       </div>
     </div>
 
-    <div class="p-4 border-t flex gap-2 flex-wrap">
+    <div class="p-4 border-t bg-white space-y-2">
       <button
         @click="editingServiceId = 'new'"
-        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all shadow-sm active:scale-95"
       >
-        Add Service
+        <PlusIcon :size="18" />
+        New Service
       </button>
-      <button
-        @click="editingGroupId = 'new'"
-        class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-      >
-        Add Group
-      </button>
-      <button
-        @click="importSLNDialog = true"
-        class="flex-1 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-      >
-        Import SLN
-      </button>
-      <button
-        @click="store.reloadConfig"
-        class="flex-1 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-        title="Reload config from services.json"
-      >
-        <RefreshCwIcon :size="16" />
-      </button>
+      <div class="grid grid-cols-3 gap-2">
+        <button
+          @click="editingGroupId = 'new'"
+          class="flex flex-col items-center justify-center p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
+          title="Add Group"
+        >
+          <FolderPlusIcon :size="18" />
+          <span class="text-[10px] mt-1 font-medium uppercase">Group</span>
+        </button>
+        <button
+          @click="importSLNDialog = true"
+          class="flex flex-col items-center justify-center p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+          title="Import SLN"
+        >
+          <DownloadIcon :size="18" />
+          <span class="text-[10px] mt-1 font-medium uppercase">Import</span>
+        </button>
+        <button
+          @click="store.reloadConfig"
+          class="flex flex-col items-center justify-center p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200 transition-colors"
+          title="Reload config from services.json"
+        >
+          <RefreshCwIcon :size="18" />
+          <span class="text-[10px] mt-1 font-medium uppercase">Reload</span>
+        </button>
+      </div>
     </div>
 
     <!-- Service Config Dialog -->
@@ -150,34 +158,79 @@
     </div>
 
     <!-- Import SLN Dialog -->
-    <div
-      v-if="importSLNDialog"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
     >
-      <div class="bg-white p-6 rounded-lg w-96">
-        <h3 class="text-lg font-semibold mb-4">Import SLN File</h3>
-        <input
-          v-model="slnPath"
-          type="text"
-          placeholder="Path to .sln file"
-          class="w-full px-3 py-2 border rounded mb-4"
-        />
-        <div class="flex gap-2">
-          <button
-            @click="importSLN"
-            class="flex-1 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-          >
-            Import
+      <div
+        v-if="importSLNDialog"
+        class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4"
+        @click.self="importSLNDialog = false"
+      >
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <DownloadIcon :size="20" class="text-indigo-600" />
+            Import SLN File
+          </h3>
+          <button @click="importSLNDialog = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+            <XIcon :size="20" />
           </button>
+        </div>
+        
+        <div class="p-6">
+          <p class="text-sm text-gray-500 mb-4">
+            Select a Visual Studio Solution (.sln) file to automatically import projects as services.
+          </p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                Solution Path
+              </label>
+              <div class="flex gap-2">
+                <div class="relative flex-1">
+                  <input
+                    v-model="slnPath"
+                    type="text"
+                    placeholder="/path/to/solution.sln"
+                    class="w-full pl-3 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+                <button
+                  @click="browseSLN"
+                  class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-2 shadow-sm whitespace-nowrap"
+                >
+                  <FolderOpenIcon :size="18" />
+                  <span class="text-sm font-medium">Browse</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
           <button
             @click="importSLNDialog = false"
-            class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            class="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors"
           >
             Cancel
+          </button>
+          <button
+            @click="importSLN"
+            :disabled="!slnPath"
+            class="flex-[2] px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-indigo-200 active:scale-[0.98]"
+          >
+            Import Projects
           </button>
         </div>
       </div>
     </div>
+    </Transition>
 
     <!-- Context Menu -->
     <div
@@ -203,7 +256,18 @@
 import { storeToRefs } from "pinia";
 import { useServicesStore } from "@/stores/services";
 import { ref } from "vue";
-import { SettingsIcon, RefreshCwIcon, PlayIcon, SquareIcon, RotateCwIcon } from "lucide-vue-next";
+import {
+  SettingsIcon,
+  RefreshCwIcon,
+  PlayIcon,
+  SquareIcon,
+  RotateCwIcon,
+  PlusIcon,
+  FolderPlusIcon,
+  DownloadIcon,
+  FolderOpenIcon,
+  XIcon,
+} from "lucide-vue-next";
 import ServiceConfig from "./ServiceConfig.vue";
 import GroupConfig from "./GroupConfig.vue";
 
@@ -228,6 +292,13 @@ const editingServiceId = ref<string>();
 const editingGroupId = ref<string>();
 const importSLNDialog = ref(false);
 const slnPath = ref("");
+
+async function browseSLN() {
+  const path = await store.browse();
+  if (path) {
+    slnPath.value = path;
+  }
+}
 
 const contextMenu = ref({
   visible: false,

@@ -15,6 +15,7 @@ export namespace process {
 	    level: string;
 	    message: string;
 	    raw: string;
+	    stream: string;
 	}
 
 }

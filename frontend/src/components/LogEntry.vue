@@ -9,21 +9,25 @@
   >
     <div
       :class="[
-        'whitespace-pre-wrap leading-5 py-0.5',
+        'whitespace-pre-wrap leading-5 py-0.5 flex gap-2',
         logLevelClass,
         { 'opacity-75': log.read && log.level === 'ERR' },
       ]"
-      v-html="processedContent"
-    />
+    >
+      <span v-if="log.stream === 'stderr'" class="flex-none opacity-50 text-[10px] uppercase border border-current px-1 rounded h-fit mt-1">stderr</span>
+      <div v-html="processedContent" class="flex-1" />
+    </div>
   </VIntersectionObserver>
   <div
     v-else
     :class="[
-      'whitespace-pre-wrap leading-5 py-0.5 break-all overflow-wrap-anywhere',
+      'whitespace-pre-wrap leading-5 py-0.5 break-all overflow-wrap-anywhere flex gap-2',
       logLevelClass
     ]"
-    v-html="processedContent"
-  />
+  >
+    <span v-if="log.stream === 'stderr'" class="flex-none opacity-50 text-[10px] uppercase border border-current px-1 rounded h-fit mt-1">stderr</span>
+    <div v-html="processedContent" class="flex-1" />
+  </div>
 </template>
 
 <script setup lang="ts">

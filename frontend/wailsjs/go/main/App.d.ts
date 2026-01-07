@@ -10,6 +10,8 @@ export function AddService(arg1:config.ServiceConfig):Promise<service.Service>;
 
 export function AddServiceToGroup(arg1:string,arg2:config.ServiceConfig):Promise<string>;
 
+export function Browse():Promise<string>;
+
 export function ClearLogs(arg1:string):Promise<void>;
 
 export function DeleteService(arg1:string):Promise<void>;
