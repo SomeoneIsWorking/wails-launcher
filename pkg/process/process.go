@@ -9,6 +9,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"wails-launcher/pkg/executablesearch"
+	"wails-launcher/pkg/processsearch"
 )
 
 // DotnetService manages dotnet processes
@@ -49,10 +52,11 @@ func (ds *DotnetService) Start() error {
 		ds.emitStatus(Error)
 		return err
 	}
-	cmd := ds.spawn()
-	if cmd == nil {
+	cmd, err := ds.spawn()
+	if err != nil {
+		ds.emitLog(Err, fmt.Sprintf("Failed to spawn process: %v", err), "")
 		ds.emitStatus(Error)
-		return fmt.Errorf("failed to start process")
+		return err
 	}
 	ds.process = cmd
 	ds.emitStatus(Initializing)
@@ -121,48 +125,18 @@ func (ds *DotnetService) cleanup() error {
 	}
 
 	for _, proc := range runningProcesses {
-		ds.emitLog(Inf, fmt.Sprintf("Killing process %s (%s)", proc.pid, proc.cmd), "")
-		err := ds.killProcess(proc.pid)
+		ds.emitLog(Inf, fmt.Sprintf("Killing process %s (%s)", proc.PID, proc.Cmd), "")
+		err := ds.killProcess(proc.PID)
 		if err != nil {
-			ds.emitLog(Err, fmt.Sprintf("Failed to kill process %s: %v", proc.pid, err), "")
+			ds.emitLog(Err, fmt.Sprintf("Failed to kill process %s: %v", proc.PID, err), "")
 		}
 	}
 	return nil
 }
 
 // findProcess finds running processes for this service
-func (ds *DotnetService) findProcess() ([]ProcessInfo, error) {
-	cmd := exec.Command("lsof", "-c", "dotnet", "-a", "-d", "cwd")
-	output, err := cmd.Output()
-	if err != nil {
-		// If lsof fails with exit code 1 and no output, no processes found
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 && len(output) == 0 {
-			return []ProcessInfo{}, nil
-		}
-		return nil, err
-	}
-
-	var results []ProcessInfo
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.Contains(line, "cwd") {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) < 9 {
-			continue
-		}
-		pid := parts[1]
-		path := parts[8]
-		if strings.Contains(strings.ToLower(path), strings.ToLower(ds.path)) {
-			results = append(results, ProcessInfo{
-				pid: pid,
-				cmd: ds.path,
-			})
-		}
-	}
-	return results, nil
+func (ds *DotnetService) findProcess() ([]processsearch.ProcessInfo, error) {
+	return processsearch.FindProcessesByCWD(ds.path)
 }
 
 // killProcess kills a process by PID
@@ -196,8 +170,13 @@ func (ds *DotnetService) killProcess(pid string) error {
 }
 
 // spawn spawns the dotnet process
-func (ds *DotnetService) spawn() *exec.Cmd {
-	cmd := exec.Command("dotnet", "run")
+func (ds *DotnetService) spawn() (*exec.Cmd, error) {
+	dotnetPath, err := executablesearch.FindExecutable("dotnet")
+	if err != nil {
+		return nil, fmt.Errorf("dotnet not found: %v", err)
+	}
+	ds.emitLog(Inf, fmt.Sprintf("Using dotnet at: %s", dotnetPath), "")
+	cmd := exec.Command(dotnetPath, "run")
 	cmd.Dir = ds.path
 	cmd.Env = os.Environ()
 	for k, v := range ds.env {
@@ -205,19 +184,19 @@ func (ds *DotnetService) spawn() *exec.Cmd {
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	err = cmd.Start()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	go ds.readOutput(stdout)
 	go ds.readOutput(stderr)
-	return cmd
+	return cmd, nil
 }
 
 // readOutput reads from pipe
