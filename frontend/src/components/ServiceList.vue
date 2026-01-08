@@ -117,9 +117,9 @@
           <span class="text-[10px] mt-1 font-medium uppercase">Group</span>
         </button>
         <button
-          @click="importSLNDialog = true"
+          @click="openImportDialog"
           class="flex flex-col items-center justify-center p-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
-          title="Import SLN"
+          title="Import Project"
         >
           <DownloadIcon :size="18" />
           <span class="text-[10px] mt-1 font-medium uppercase">Import</span>
@@ -136,101 +136,24 @@
     </div>
 
     <!-- Service Config Dialog -->
-    <div
+    <ServiceConfig
       v-if="editingServiceId"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    >
-      <ServiceConfig
-        :service-id="editingServiceId"
-        @close="editingServiceId = undefined"
-      />
-    </div>
+      :service-id="editingServiceId"
+      @close="editingServiceId = undefined"
+    />
 
     <!-- Group Config Dialog -->
-    <div
+    <GroupConfig
       v-if="editingGroupId"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    >
-      <GroupConfig
-        :group-id="editingGroupId"
-        @close="editingGroupId = undefined"
-      />
-    </div>
+      :group-id="editingGroupId"
+      @close="editingGroupId = undefined"
+    />
 
-    <!-- Import SLN Dialog -->
-    <Transition
-      enter-active-class="transition duration-200 ease-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="importSLNDialog"
-        class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4"
-        @click.self="importSLNDialog = false"
-      >
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <DownloadIcon :size="20" class="text-indigo-600" />
-            Import SLN File
-          </h3>
-          <button @click="importSLNDialog = false" class="text-gray-400 hover:text-gray-600 transition-colors">
-            <XIcon :size="20" />
-          </button>
-        </div>
-        
-        <div class="p-6">
-          <p class="text-sm text-gray-500 mb-4">
-            Select a Visual Studio Solution (.sln) file to automatically import projects as services.
-          </p>
-          
-          <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
-                Solution Path
-              </label>
-              <div class="flex gap-2">
-                <div class="relative flex-1">
-                  <input
-                    v-model="slnPath"
-                    type="text"
-                    placeholder="/path/to/solution.sln"
-                    class="w-full pl-3 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                  />
-                </div>
-                <button
-                  @click="browseSLN"
-                  class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-2 shadow-sm whitespace-nowrap"
-                >
-                  <FolderOpenIcon :size="18" />
-                  <span class="text-sm font-medium">Browse</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-          <button
-            @click="importSLNDialog = false"
-            class="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            @click="importSLN"
-            :disabled="!slnPath"
-            class="flex-[2] px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-indigo-200 active:scale-[0.98]"
-          >
-            Import Projects
-          </button>
-        </div>
-      </div>
-    </div>
-    </Transition>
+    <!-- Import Dialog -->
+    <ImportDialog
+      v-if="importDialog"
+      @close="importDialog = false"
+    />
 
     <!-- Context Menu -->
     <div
@@ -265,11 +188,10 @@ import {
   PlusIcon,
   FolderPlusIcon,
   DownloadIcon,
-  FolderOpenIcon,
-  XIcon,
 } from "lucide-vue-next";
 import ServiceConfig from "./ServiceConfig.vue";
 import GroupConfig from "./GroupConfig.vue";
+import ImportDialog from "./ImportDialog.vue";
 
 const store = useServicesStore();
 const { groups, selectedService } = storeToRefs(store);
@@ -290,14 +212,10 @@ function formatUrl(url: string): string {
 
 const editingServiceId = ref<string>();
 const editingGroupId = ref<string>();
-const importSLNDialog = ref(false);
-const slnPath = ref("");
+const importDialog = ref(false);
 
-async function browseSLN() {
-  const path = await store.browse();
-  if (path) {
-    slnPath.value = path;
-  }
+function openImportDialog() {
+  importDialog.value = true;
 }
 
 const contextMenu = ref({
@@ -313,18 +231,6 @@ function editService(id: string) {
 
 function editGroup(id: string) {
   editingGroupId.value = id;
-}
-
-async function importSLN() {
-  if (slnPath.value) {
-    try {
-      await store.importSLN(slnPath.value);
-      importSLNDialog.value = false;
-      slnPath.value = "";
-    } catch (error) {
-      console.error("Failed to import SLN:", error);
-    }
-  }
 }
 
 function showGroupContextMenu(event: MouseEvent, groupId: string) {

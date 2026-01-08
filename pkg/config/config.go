@@ -16,6 +16,7 @@ type ServiceConfig struct {
 	Name string     `json:"name"`
 	Path string     `json:"path"`
 	Env  ServiceEnv `json:"env"`
+	Type string     `json:"type"` // "dotnet", "npm", etc.
 }
 
 // GroupConfig represents group configuration

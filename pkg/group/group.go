@@ -2,6 +2,7 @@ package group
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -138,6 +139,7 @@ func (m *Manager) ImportSLN(slnPath string) error {
 				Name: projectName,
 				Path: filepath.Dir(projectPath), // Directory containing the .csproj
 				Env:  make(config.ServiceEnv),
+				Type: "dotnet",
 			}
 
 			// Only add projects that have a Program.cs file
@@ -157,23 +159,51 @@ func (m *Manager) ImportSLN(slnPath string) error {
 	return nil
 }
 
-// GetGroupServices returns all services in all groups with merged environments
-func (m *Manager) GetGroupServices() map[string]config.ServiceConfig {
-	result := make(map[string]config.ServiceConfig)
+// ImportProject imports a single project into a group
+func (m *Manager) ImportProject(groupId string, path string, projectType string) (string, error) {
+	dir := filepath.Dir(path)
+	name := filepath.Base(dir) // Default to folder name
+
+	if projectType == "npm" && strings.HasSuffix(path, "package.json") {
+		// Try to read package.json
+		data, err := os.ReadFile(path)
+		if err == nil {
+			var pkg struct {
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(data, &pkg); err == nil && pkg.Name != "" {
+				name = pkg.Name
+			}
+		}
+	} else if projectType == "dotnet" {
+		// For .csproj, filename is usually the project name
+		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	}
+
+	serviceConfig := config.ServiceConfig{
+		Name: name,
+		Path: dir,
+		Env:  make(config.ServiceEnv),
+		Type: projectType,
+	}
+
+	return m.AddServiceToGroup(groupId, serviceConfig), nil
+}
+
+// EnrichedServiceConfig includes the service config and its inherited environment
+type EnrichedServiceConfig struct {
+	Config       config.ServiceConfig
+	InheritedEnv config.ServiceEnv
+}
+
+// GetGroupServices returns all services in all groups with their inherited environments
+func (m *Manager) GetGroupServices() map[string]EnrichedServiceConfig {
+	result := make(map[string]EnrichedServiceConfig)
 	for _, group := range m.groups {
 		for serviceId, serviceConfig := range group.Services {
-			// Merge group env with service env
-			mergedEnv := make(config.ServiceEnv)
-			for k, v := range group.Env {
-				mergedEnv[k] = v
-			}
-			for k, v := range serviceConfig.Env {
-				mergedEnv[k] = v
-			}
-			result[serviceId] = config.ServiceConfig{
-				Name: serviceConfig.Name,
-				Path: serviceConfig.Path,
-				Env:  mergedEnv,
+			result[serviceId] = EnrichedServiceConfig{
+				Config:       serviceConfig,
+				InheritedEnv: group.Env,
 			}
 		}
 	}

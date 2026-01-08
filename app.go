@@ -78,8 +78,8 @@ func (a *App) startup(ctx context.Context) {
 // loadServices loads services from configuration
 func (a *App) loadServices() {
 	groupServices := a.groups.GetGroupServices()
-	for serviceId, serviceConfig := range groupServices {
-		srv := service.NewService(serviceId, serviceConfig, a)
+	for serviceId, enriched := range groupServices {
+		srv := service.NewService(serviceId, enriched.Config, enriched.InheritedEnv, a)
 		a.services[serviceId] = srv
 	}
 }
@@ -198,11 +198,11 @@ func (a *App) ReloadServices() {
 	}
 
 	// Update or create services
-	for id, serviceConfig := range groupServices {
+	for id, enriched := range groupServices {
 		if srv, exists := a.services[id]; exists {
-			srv.UpdateConfig(serviceConfig)
+			srv.UpdateConfig(enriched.Config, enriched.InheritedEnv)
 		} else {
-			srv := service.NewService(id, serviceConfig, a)
+			srv := service.NewService(id, enriched.Config, enriched.InheritedEnv, a)
 			a.services[id] = srv
 		}
 	}
@@ -231,8 +231,8 @@ func (a *App) UpdateGroup(id string, name string, env config.ServiceEnv) {
 		for serviceId := range grp.Services {
 			if srv, exists := a.services[serviceId]; exists {
 				groupServices := a.groups.GetGroupServices()
-				if serviceConfig, exists := groupServices[serviceId]; exists {
-					srv.UpdateConfig(serviceConfig)
+				if enriched, exists := groupServices[serviceId]; exists {
+					srv.UpdateConfig(enriched.Config, enriched.InheritedEnv)
 				}
 			}
 		}
@@ -246,8 +246,8 @@ func (a *App) AddServiceToGroup(groupId string, config config.ServiceConfig) str
 
 	// Create the service
 	groupServices := a.groups.GetGroupServices()
-	if serviceConfig, exists := groupServices[serviceId]; exists {
-		srv := service.NewService(serviceId, serviceConfig, a)
+	if enriched, exists := groupServices[serviceId]; exists {
+		srv := service.NewService(serviceId, enriched.Config, enriched.InheritedEnv, a)
 		a.services[serviceId] = srv
 	}
 	return serviceId
@@ -260,9 +260,9 @@ func (a *App) UpdateServiceInGroup(groupId string, serviceId string, config conf
 
 	// Update the service
 	groupServices := a.groups.GetGroupServices()
-	if serviceConfig, exists := groupServices[serviceId]; exists {
+	if enriched, exists := groupServices[serviceId]; exists {
 		if srv, exists := a.services[serviceId]; exists {
-			srv.UpdateConfig(serviceConfig)
+			srv.UpdateConfig(enriched.Config, enriched.InheritedEnv)
 		}
 	}
 }
@@ -277,9 +277,29 @@ func (a *App) ImportSLN(slnPath string) error {
 
 	// Create services for the new group
 	groupServices := a.groups.GetGroupServices()
-	for serviceId, serviceConfig := range groupServices {
+	for serviceId, enriched := range groupServices {
 		if _, exists := a.services[serviceId]; !exists {
-			srv := service.NewService(serviceId, serviceConfig, a)
+			srv := service.NewService(serviceId, enriched.Config, enriched.InheritedEnv, a)
+			a.services[serviceId] = srv
+		}
+	}
+
+	return nil
+}
+
+// ImportProject imports a single project into a group
+func (a *App) ImportProject(groupId string, path string, projectType string) error {
+	serviceId, err := a.groups.ImportProject(groupId, path, projectType)
+	if err != nil {
+		return err
+	}
+	a.saveConfig()
+
+	// Create the service
+	groupServices := a.groups.GetGroupServices()
+	if enriched, exists := groupServices[serviceId]; exists {
+		if _, exists := a.services[serviceId]; !exists {
+			srv := service.NewService(serviceId, enriched.Config, enriched.InheritedEnv, a)
 			a.services[serviceId] = srv
 		}
 	}
@@ -288,13 +308,16 @@ func (a *App) ImportSLN(slnPath string) error {
 }
 
 // Browse opens a file dialog and returns the selected path
-func (a *App) Browse() (string, error) {
+func (a *App) Browse(title string, filterName string, pattern string) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app context not initialized")
+	}
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select .sln file",
+		Title: title,
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "Solution Files (*.sln)",
-				Pattern:     "*.sln",
+				DisplayName: filterName,
+				Pattern:     pattern,
 			},
 		},
 	})

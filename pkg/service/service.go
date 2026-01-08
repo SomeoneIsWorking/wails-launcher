@@ -11,22 +11,25 @@ import (
 
 // ServiceInfo represents service information
 type ServiceInfo struct {
-	Name   string                `json:"name"`
-	Path   string                `json:"path"`
-	Status process.ServiceStatus `json:"status"`
-	URL    *string               `json:"url,omitempty"`
-	Logs   []process.LogEntry    `json:"logs"`
-	Env    config.ServiceEnv     `json:"env"`
+	Name         string                `json:"name"`
+	Path         string                `json:"path"`
+	Status       process.ServiceStatus `json:"status"`
+	URL          *string               `json:"url,omitempty"`
+	Logs         []process.LogEntry    `json:"logs"`
+	Env          config.ServiceEnv     `json:"env"`
+	InheritedEnv config.ServiceEnv     `json:"inheritedEnv"`
+	Type         string                `json:"type"`
 }
 
 // Service represents a service
 type Service struct {
 	ID             string
 	Config         config.ServiceConfig
+	InheritedEnv   config.ServiceEnv
 	Status         process.ServiceStatus
 	Logs           []process.LogEntry
 	URL            *string
-	processManager *process.DotnetService
+	processManager process.ServiceManager
 	mu             sync.RWMutex
 	app            AppInterface
 }
@@ -37,15 +40,35 @@ type AppInterface interface {
 }
 
 // NewService creates a new service
-func NewService(id string, config config.ServiceConfig, app AppInterface) *Service {
+func NewService(id string, config config.ServiceConfig, inheritedEnv config.ServiceEnv, app AppInterface) *Service {
 	service := &Service{
-		ID:     id,
-		Config: config,
-		Status: process.Stopped,
-		Logs:   []process.LogEntry{},
-		app:    app,
+		ID:           id,
+		Config:       config,
+		InheritedEnv: inheritedEnv,
+		Status:       process.Stopped,
+		Logs:         []process.LogEntry{},
+		app:          app,
 	}
-	service.processManager = process.NewDotnetService(config.Path, config.Env)
+
+	mergedEnv := make(process.ServiceEnv)
+	for k, v := range inheritedEnv {
+		mergedEnv[k] = v
+	}
+	for k, v := range config.Env {
+		if v == "" {
+			delete(mergedEnv, k)
+		} else {
+			mergedEnv[k] = v
+		}
+	}
+
+	if config.Type == "npm" {
+		service.processManager = process.NewNpmService(config.Path, mergedEnv)
+	} else {
+		// Default to dotnet for backward compatibility
+		service.processManager = process.NewDotnetService(config.Path, mergedEnv)
+	}
+
 	go service.listenEvents()
 	return service
 }
@@ -98,11 +121,24 @@ func (s *Service) listenEvents() {
 }
 
 // UpdateConfig updates the service configuration
-func (s *Service) UpdateConfig(config config.ServiceConfig) {
+func (s *Service) UpdateConfig(config config.ServiceConfig, inheritedEnv config.ServiceEnv) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Config = config
-	s.processManager.UpdateConfig(config.Path, config.Env)
+	s.InheritedEnv = inheritedEnv
+
+	mergedEnv := make(process.ServiceEnv)
+	for k, v := range inheritedEnv {
+		mergedEnv[k] = v
+	}
+	for k, v := range config.Env {
+		if v == "" {
+			delete(mergedEnv, k)
+		} else {
+			mergedEnv[k] = v
+		}
+	}
+	s.processManager.UpdateConfig(config.Path, mergedEnv)
 }
 
 // GetInfo returns service information
@@ -110,12 +146,14 @@ func (s *Service) GetInfo() ServiceInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return ServiceInfo{
-		Name:   s.Config.Name,
-		Path:   s.Config.Path,
-		Status: s.Status,
-		URL:    s.URL,
-		Logs:   s.Logs,
-		Env:    s.Config.Env,
+		Name:         s.Config.Name,
+		Path:         s.Config.Path,
+		Status:       s.Status,
+		URL:          s.URL,
+		Logs:         s.Logs,
+		Env:          s.Config.Env,
+		InheritedEnv: s.InheritedEnv,
+		Type:         s.Config.Type,
 	}
 }
 

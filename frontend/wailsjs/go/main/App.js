@@ -14,8 +14,8 @@ export function AddServiceToGroup(arg1, arg2) {
   return window['go']['main']['App']['AddServiceToGroup'](arg1, arg2);
 }
 
-export function Browse() {
-  return window['go']['main']['App']['Browse']();
+export function Browse(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Browse'](arg1, arg2, arg3);
 }
 
 export function ClearLogs(arg1) {
@@ -40,6 +40,10 @@ export function GetService(arg1) {
 
 export function GetServices() {
   return window['go']['main']['App']['GetServices']();
+}
+
+export function ImportProject(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportProject'](arg1, arg2, arg3);
 }
 
 export function ImportSLN(arg1) {

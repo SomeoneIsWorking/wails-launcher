@@ -1,23 +1,22 @@
 <template>
-  <div class="bg-white p-6 rounded-lg shadow-lg w-auto min-w-[30rem]">
-    <h3 class="text-lg font-medium mb-4">
-      {{ groupId === "new" ? "Add" : "Edit" }} Group
-    </h3>
-
+  <VDialog
+    :title="groupId === 'new' ? 'Add Group' : 'Edit Group'"
+    @close="$emit('close')"
+  >
     <div class="space-y-4">
       <div>
         <label class="block text-sm font-medium mb-1">Name</label>
         <input
           v-model="formData.name"
           type="text"
-          class="w-full px-3 py-2 border rounded"
+          class="v-input"
         />
       </div>
 
       <EnvVariables v-model="formData.env" />
     </div>
 
-    <div class="flex justify-end gap-2 mt-6">
+    <template #footer>
       <button
         @click="$emit('close')"
         class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
@@ -30,14 +29,15 @@
       >
         Save
       </button>
-    </div>
-  </div>
+    </template>
+  </VDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
 import { useServicesStore } from "@/stores/services";
 import EnvVariables, { type EnvVar } from "./EnvVariables.vue";
+import VDialog from "./VDialog.vue";
 
 interface Props {
   groupId: string;

@@ -4,6 +4,7 @@ export namespace config {
 	    name: string;
 	    path: string;
 	    env: Record<string, string>;
+	    type: string;
 	}
 
 }
@@ -25,6 +26,7 @@ export namespace service {
 	export interface Service {
 	    ID: string;
 	    Config: config.ServiceConfig;
+	    InheritedEnv: Record<string, string>;
 	    Status: string;
 	    Logs: process.LogEntry[];
 	    URL?: string;
@@ -36,6 +38,8 @@ export namespace service {
 	    url?: string;
 	    logs: process.LogEntry[];
 	    env: Record<string, string>;
+	    inheritedEnv: Record<string, string>;
+	    type: string;
 	}
 
 }

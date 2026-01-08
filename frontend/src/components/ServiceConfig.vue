@@ -1,15 +1,14 @@
 <template>
-  <div class="bg-white p-6 rounded-lg shadow-lg w-auto min-w-[30rem]">
-    <h3 class="text-lg font-medium mb-4">
-      {{ serviceId === "new" ? "Add" : "Edit" }} Service
-    </h3>
-
+  <VDialog
+    :title="serviceId === 'new' ? 'Add Service' : 'Edit Service'"
+    @close="$emit('close')"
+  >
     <div class="space-y-4">
       <div v-if="serviceId === 'new'">
         <label class="block text-sm font-medium mb-1"> Group </label>
         <select
           v-model="selectedGroupId"
-          class="w-full px-3 py-2 border rounded"
+          class="v-select"
         >
           <option value="">Select a group</option>
           <option
@@ -23,11 +22,22 @@
       </div>
 
       <div>
+        <label class="block text-sm font-medium mb-1"> Project Type </label>
+        <select
+          v-model="form.type"
+          class="v-select"
+        >
+          <option value="dotnet">.NET Run</option>
+          <option value="npm">NPM Run Dev</option>
+        </select>
+      </div>
+
+      <div>
         <label class="block text-sm font-medium mb-1"> Name </label>
         <input
           v-model="form.name"
           type="text"
-          class="w-full px-3 py-2 border rounded"
+          class="v-input"
         />
       </div>
 
@@ -36,14 +46,17 @@
         <input
           v-model="form.path"
           type="text"
-          class="w-full px-3 py-2 border rounded"
+          class="v-input"
         />
       </div>
 
-      <EnvVariables v-model="form.env" />
+      <EnvVariables
+        v-model="form.env"
+        :inherited-env="inheritedEnv"
+      />
     </div>
 
-    <div class="flex justify-end gap-2 mt-6">
+    <template #footer>
       <button
         @click="$emit('close')"
         class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
@@ -56,15 +69,16 @@
       >
         Save
       </button>
-    </div>
-  </div>
+    </template>
+  </VDialog>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { map } from "lodash-es";
 import { useServicesStore } from "@/stores/services";
 import EnvVariables from "./EnvVariables.vue";
+import VDialog from "./VDialog.vue";
 
 const store = useServicesStore();
 
@@ -78,10 +92,20 @@ const emit = defineEmits<{
 const form = ref(setup());
 const selectedGroupId = ref("");
 
+const inheritedEnv = computed(() => {
+  if (props.serviceId === "new") {
+    if (!selectedGroupId.value) return {};
+    return store.groups[selectedGroupId.value]?.env || {};
+  }
+
+  const service = store.services[props.serviceId];
+  return service?.inheritedEnv || {};
+});
+
 function setup() {
   const value = props.serviceId;
   if (value === "new") {
-    return { name: "", path: "", env: [] };
+    return { name: "", path: "", env: [], type: "dotnet" };
   }
   const service = store.services[value];
   if (!service) {
@@ -90,6 +114,7 @@ function setup() {
   return {
     name: service.name,
     path: service.path,
+    type: service.type || "dotnet",
     env: map(Object.entries(service.env), ([key, value], index) => ({
       index,
       key,
@@ -102,6 +127,7 @@ function toModel() {
   return {
     name: form.value.name,
     path: form.value.path,
+    type: form.value.type,
     env: Object.fromEntries(
       form.value.env.map(({ key, value }) => [key, value])
     ),

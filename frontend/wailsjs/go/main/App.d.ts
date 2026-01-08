@@ -10,7 +10,7 @@ export function AddService(arg1:config.ServiceConfig):Promise<service.Service>;
 
 export function AddServiceToGroup(arg1:string,arg2:config.ServiceConfig):Promise<string>;
 
-export function Browse():Promise<string>;
+export function Browse(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function ClearLogs(arg1:string):Promise<void>;
 
@@ -23,6 +23,8 @@ export function GetGroups():Promise<Record<string, config.GroupConfig>>;
 export function GetService(arg1:string):Promise<service.ServiceInfo>;
 
 export function GetServices():Promise<Record<string, service.ServiceInfo>>;
+
+export function ImportProject(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ImportSLN(arg1:string):Promise<void>;
 

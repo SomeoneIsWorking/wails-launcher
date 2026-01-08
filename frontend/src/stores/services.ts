@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { MAX_LOGS } from "@/constants";
 import type { ServiceConfig, ServiceInfo } from "@/types/service";
 import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
-import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
+import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 
 function parseReadLogs(serviceName: string): Set<string> {
@@ -110,6 +110,11 @@ export const useServicesStore = defineStore("services", () => {
     await loadAll();
   }
 
+  async function importProject(groupId: string, path: string, projectType: string) {
+    await ImportProject(groupId, path, projectType);
+    await loadAll();
+  }
+
   async function addService(config: ServiceConfig) {
     const service = await AddService(config);
     const id = service.ID;
@@ -120,6 +125,8 @@ export const useServicesStore = defineStore("services", () => {
       url: service.URL,
       logs: service.Logs,
       env: service.Config.env,
+      inheritedEnv: service.InheritedEnv,
+      type: service.Config.type,
     });
     services.value[id] = clientService;
     if (!selectedService.value) {
@@ -135,6 +142,7 @@ export const useServicesStore = defineStore("services", () => {
       name: config.name,
       path: config.path,
       env: config.env,
+      type: config.type,
     };
   }
 
@@ -244,8 +252,8 @@ export const useServicesStore = defineStore("services", () => {
     await StartGroup(groupId);
   }
 
-  async function browse(): Promise<string> {
-    return await Browse();
+  async function browse(title: string, filterName: string, pattern: string): Promise<string> {
+    return await Browse(title, filterName, pattern);
   }
 
   function saveScrollPosition(serviceId: string, position: ScrollPosition | undefined) {
@@ -283,6 +291,7 @@ export const useServicesStore = defineStore("services", () => {
     startGroup,
     browse,
     loadAll,
+    importProject,
     saveScrollPosition,
     getScrollPosition,
   };
