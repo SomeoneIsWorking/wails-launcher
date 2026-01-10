@@ -5,10 +5,21 @@ import type { ServiceConfig, ServiceInfo } from "@/types/service";
 import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
 import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
+import { process } from 'wailsjs/go/models.js';
 
 function parseReadLogs(serviceName: string): Set<string> {
   const stored = localStorage.getItem(`readLogs_${serviceName}`);
   return new Set(JSON.parse(stored || "[]"));
+}
+
+function transformLogEntry(log: process.LogEntry): ClientLogEntry {
+  const lines = log.message.split(/\n|\. /);
+  return {
+    ...log,
+    read: false,
+    lines: lines,
+    height: lines.length * 20
+  };
 }
 
 export const useServicesStore = defineStore("services", () => {
@@ -28,7 +39,7 @@ export const useServicesStore = defineStore("services", () => {
   function mapToClientServiceInfo(service: ServiceInfo): ClientServiceInfo {
     return {
       ...service,
-      logs: service.logs.map((log: any) => ({ ...log, read: false })),
+      logs: service.logs.map((log: any) => transformLogEntry(log)),
       unreadErrors: 0,
     };
   }
@@ -160,10 +171,7 @@ export const useServicesStore = defineStore("services", () => {
         case "newLog": {
           const service = services.value[msg.serviceId];
           if (service) {
-            const clientLog: ClientLogEntry = {
-              ...msg.data.log,
-              read: false,
-            };
+            const clientLog = transformLogEntry(msg.data.log);
             service.logs.push(clientLog);
             if (service.logs.length > MAX_LOGS) {
               service.logs.shift();

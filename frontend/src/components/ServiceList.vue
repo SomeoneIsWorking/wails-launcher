@@ -16,86 +16,14 @@
             <SettingsIcon :size="16" />
           </button>
         </div>
-        <div
+        <ServiceItem
           v-for="(service, serviceId) in group.services"
           :key="serviceId"
-          @click="store.selectService(serviceId)"
-          @contextmenu.prevent="showServiceContextMenu($event, serviceId, service)"
-          :class="[
-            'p-4 pl-8',
-            selectedService === service
-              ? 'bg-blue-300'
-              : 'hover:bg-blue-200 cursor-pointer',
-          ]"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-gray-800">
-              {{ service.name }}
-            </span>
-            <div class="flex items-center gap-2">
-              <button
-                @click.stop="editService(serviceId)"
-                class="text-gray-500 hover:text-gray-700"
-              >
-                <SettingsIcon :size="16" />
-              </button>
-              <div
-                :class="['w-3 h-3 rounded-full', statusColor(service.status)]"
-              ></div>
-              <span
-                v-if="store.getUnreadErrorCount(serviceId)"
-                class="bg-red-500 text-white text-xs px-2 rounded-full"
-              >
-                {{ store.getUnreadErrorCount(serviceId) }}
-              </span>
-            </div>
-          </div>
-
-          <a
-            v-if="service.url"
-            :href="service.url"
-            target="_blank"
-            class="text-xs text-blue-600 hover:underline mb-2"
-          >
-            {{ formatUrl(service.url) }}
-          </a>
-
-          <div class="flex gap-2">
-            <button
-              @click="store.startService(serviceId)"
-              :disabled="
-                service.status === 'running' ||
-                service.status === 'starting' ||
-                service.status === 'stopping' ||
-                service.status === 'initializing'
-              "
-              class="p-2 text-sm bg-green-500 text-white rounded disabled:opacity-50 hover:bg-green-600"
-              title="Start"
-            >
-              <PlayIcon :size="16" />
-            </button>
-            <button
-              @click="store.stopService(serviceId)"
-              :disabled="
-                service.status === 'stopped' ||
-                service.status === 'starting' ||
-                service.status === 'stopping'
-              "
-              class="p-2 text-sm bg-red-500 text-white rounded disabled:opacity-50 hover:bg-red-600"
-              title="Stop"
-            >
-              <SquareIcon :size="16" />
-            </button>
-            <button
-              @click="store.restartService(serviceId)"
-              :disabled="service.status !== 'running'"
-              class="p-2 text-sm bg-blue-500 text-white rounded disabled:opacity-50 hover:bg-blue-600"
-              title="Restart"
-            >
-              <RotateCwIcon :size="16" />
-            </button>
-          </div>
-        </div>
+          :service-id="serviceId"
+          :service="service"
+          :is-selected="selectedService === service"
+          @edit="editService(serviceId)"
+        />
       </div>
     </div>
 
@@ -154,37 +82,17 @@
       v-if="importDialog"
       @close="importDialog = false"
     />
-
-    <!-- Context Menu -->
-    <div
-      v-if="contextMenu.visible"
-      class="fixed bg-white border border-gray-300 rounded shadow-lg z-50"
-      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-      @click.stop
-    >
-      <div
-        v-for="option in contextMenu.options"
-        :key="option.label"
-        @click="option.action"
-        class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-        :class="{ 'text-gray-400 cursor-not-allowed': option.disabled }"
-      >
-        {{ option.label }}
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
 import { useServicesStore } from "@/stores/services";
+import { useContextMenuStore } from "@/stores/contextMenu";
 import { ref } from "vue";
 import {
   SettingsIcon,
   RefreshCwIcon,
-  PlayIcon,
-  SquareIcon,
-  RotateCwIcon,
   PlusIcon,
   FolderPlusIcon,
   DownloadIcon,
@@ -192,23 +100,11 @@ import {
 import ServiceConfig from "./ServiceConfig.vue";
 import GroupConfig from "./GroupConfig.vue";
 import ImportDialog from "./ImportDialog.vue";
+import ServiceItem from "./ServiceItem.vue";
 
 const store = useServicesStore();
+const contextMenuStore = useContextMenuStore();
 const { groups, selectedService } = storeToRefs(store);
-
-const statusColor = (status: string) =>
-  ({
-    running: "bg-green-500",
-    stopped: "bg-gray-500",
-    error: "bg-red-500",
-    starting: "bg-yellow-500",
-    stopping: "bg-yellow-500",
-    initializing: "bg-yellow-500",
-  }[status]);
-
-function formatUrl(url: string): string {
-  return url.replace(/^https?:\/\//, "");
-}
 
 const editingServiceId = ref<string>();
 const editingGroupId = ref<string>();
@@ -217,13 +113,6 @@ const importDialog = ref(false);
 function openImportDialog() {
   importDialog.value = true;
 }
-
-const contextMenu = ref({
-  visible: false,
-  x: 0,
-  y: 0,
-  options: [] as { label: string; action: () => void; disabled?: boolean }[],
-});
 
 function editService(id: string) {
   editingServiceId.value = id;
@@ -234,47 +123,14 @@ function editGroup(id: string) {
 }
 
 function showGroupContextMenu(event: MouseEvent, groupId: string) {
-  contextMenu.value = {
-    visible: true,
-    x: event.clientX,
-    y: event.clientY,
-    options: [
-      {
-        label: "Launch Group",
-        action: () => {
-          store.startGroup(groupId);
-          hideContextMenu();
-        },
+  contextMenuStore.show(event, [
+    {
+      label: "Launch Group",
+      action: () => {
+        store.startGroup(groupId);
+        contextMenuStore.hide();
       },
-    ],
-  };
+    },
+  ]);
 }
-
-function showServiceContextMenu(event: MouseEvent, serviceId: string, service: any) {
-  const options = [];
-  if (service.status === 'stopped') {
-    options.push({
-      label: "Delete Service",
-      action: async () => {
-        await store.deleteService(serviceId);
-        hideContextMenu();
-      },
-    });
-  }
-  if (options.length > 0) {
-    contextMenu.value = {
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      options,
-    };
-  }
-}
-
-function hideContextMenu() {
-  contextMenu.value.visible = false;
-}
-
-// Hide context menu on click outside
-document.addEventListener('click', hideContextMenu);
 </script>

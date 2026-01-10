@@ -1,14 +1,13 @@
 <template>
-  <div ref="element">
-    <slot />
-  </div>
+  <slot ref="element" />
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from "vue";
 
 const props = defineProps<{
   threshold?: number;
+  enabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,9 +15,14 @@ const emit = defineEmits<{
 }>();
 
 const element = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
 
-onMounted(() => {
-  const observer = new IntersectionObserver(
+const setupObserver = () => {
+  if (!element.value || !props.enabled) {
+    return;
+  }
+
+  observer = new IntersectionObserver(
     (entries) => {
       if (entries[0].isIntersecting) {
         emit("intersection");
@@ -27,10 +31,32 @@ onMounted(() => {
     { threshold: props.threshold ?? 0.5 }
   );
 
-  observer.observe(element.value!);
+  observer.observe(element.value);
+};
 
-  onUnmounted(() => {
+const cleanupObserver = () => {
+  if (observer) {
     observer.disconnect();
-  });
+    observer = null;
+  }
+};
+
+onMounted(() => {
+  setupObserver();
+});
+
+watch(
+  () => props.enabled,
+  (enabled) => {
+    if (enabled) {
+      setupObserver();
+    } else {
+      cleanupObserver();
+    }
+  }
+);
+
+onUnmounted(() => {
+  cleanupObserver();
 });
 </script>

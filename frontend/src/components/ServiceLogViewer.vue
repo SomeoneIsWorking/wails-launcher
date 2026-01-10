@@ -1,55 +1,28 @@
 <template>
-  <div class="flex-1 flex flex-col overflow-hidden">
-    <div
-      class="absolute z-10 top-4 right-6 flex items-stretch bg-gray-800/90 rounded-full shadow-lg backdrop-blur-sm text-sm text-gray-300"
-    >
-      <div class="px-5 flex items-center">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search logs..."
-          class="bg-transparent border-none outline-none text-white placeholder-gray-400 w-48"
-        />
-      </div>
-      <span class="inline-block w-0.5 flex-grow bg-gray-500"></span>
-      <button @click="clearLogs" class="px-5 py-2 hover:text-white">
-        Clear Logs
-      </button>
-      <span class="inline-block w-0.5 flex-grow bg-gray-500"></span>
-      <div class="px-5 flex items-center">
-        Error {{ currentOrPreviousErrorIndex + 1 }} of {{ errors.length }}
-      </div>
-      <!-- vertical separator -->
-      <span class="inline-block w-0.5 flex-grow bg-gray-500"></span>
-      <div class="flex items-center gap-2 px-5 py-2">
-        <button
-          @click="navigateError(errorsAbove.at(-1))"
-          :disabled="!errorsAbove.length"
-          class="nav-buttons"
-        >
-          {{ errorsAbove.length }}
-          <ChevronUp class="w-5 h-5" />
-        </button>
-        <button
-          @click="navigateError(errorsBelow[0])"
-          :disabled="!errorsBelow.length"
-          class="nav-buttons"
-        >
-          {{ errorsBelow.length }}
-          <ChevronDown class="w-5 h-5" />
-        </button>
-      </div>
-    </div>
+  <div class="flex-1 flex flex-col overflow-y-hidden relative">
+    <LogViewerControls
+      v-model:search-query="searchQuery"
+      :errors="errors"
+      :errors-above="errorsAbove"
+      :errors-below="errorsBelow"
+      :current-or-previous-error-index="currentOrPreviousErrorIndex"
+      @clear-logs="clearLogs"
+      @navigate-error="navigateError"
+    />
     <VirtualScroller
       ref="virtualScroller"
       :items="filteredLogs"
-      height="100%"
-      :buffer="10"
       @scroll="handleScroll"
       @ready="handleVirtualScrollerReady"
+      class="text-[0.8rem] whitespace-pre leading-5"
     >
       <template #default="{ item: log, index: _index }">
-        <LogEntry :log="log" :service-name="service.name" />
+        <LogEntry
+          :log="log"
+          :service-name="service.name"
+          :service-path="service.path"
+          :common-base-path="commonBasePath"
+        />
       </template>
     </VirtualScroller>
     <button
@@ -63,13 +36,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted, watch, onBeforeUnmount } from "vue";
-import { ChevronUp, ChevronDown } from "lucide-vue-next";
+import {
+  ref,
+  nextTick,
+  computed,
+  onMounted,
+  watch,
+  onBeforeUnmount,
+} from "vue";
+import { ChevronDown } from "lucide-vue-next";
 import { useServicesStore } from "@/stores/services";
 import type { ComponentInstance } from "vue";
 import VirtualScroller from "./VirtualScroller.vue";
-import type { ScrollPosition } from "@/types/client";
+import type { ClientLogEntry, ScrollPosition } from "@/types/client";
 import LogEntry from "./LogEntry.vue";
+import LogViewerControls from "./LogViewerControls.vue";
 
 const props = defineProps<{
   serviceId: string;
@@ -91,6 +72,45 @@ const errorsBelow = ref<typeof errors.value>([]);
 
 const searchQuery = ref("");
 
+const commonBasePath = computed(() => {
+  const fileRegex = /([/\\][\w\s\-.@/\\]+[/\\][\w\s\-.@/\\]+\.[\w]+)/g;
+  const allPaths: string[] = [];
+
+  // Extract all file paths from all logs
+  service.value.logs.forEach((log: ClientLogEntry) => {
+    const matches = [...log.message.matchAll(fileRegex)];
+    matches.forEach((m) => allPaths.push(m[1].trim()));
+  });
+
+  if (!service.value.path || allPaths.length === 0) return "";
+
+  // Generate candidate paths: project path and up to 2 levels up
+  const parts = service.value.path.split("/");
+  const candidates = [
+    service.value.path, // Most specific
+    parts.slice(0, -1).join("/"), // 1 level up
+    parts.slice(0, -2).join("/"), // 2 levels up (most general)
+  ].filter((p) => p.length > 0);
+
+  // Check from most specific to most general
+  // Use the most specific candidate that is an ancestor of OTHER file paths (not in project path)
+  for (const candidate of candidates) {
+    // Check if there are paths outside the project path that share this candidate as ancestor
+    const pathsOutsideProject = allPaths.filter(
+      (p) => !p.startsWith(service.value.path + "/") && p !== service.value.path
+    );
+    const hasSharedAncestor = pathsOutsideProject.some((p) =>
+      p.startsWith(candidate + "/")
+    );
+
+    if (hasSharedAncestor) {
+      return candidate;
+    }
+  }
+
+  return service.value.path;
+});
+
 const updateErrorNavigation = () => {
   const range = virtualScroller.value?.getVisibleRange();
   if (!range) return;
@@ -98,24 +118,26 @@ const updateErrorNavigation = () => {
   errorsAbove.value = errors.value.filter(
     (error: any) => error.elementIndex < range.start
   );
-  
+
   errorsBelow.value = errors.value.filter(
     (error: any) => error.elementIndex > range.end
   );
 
   currentOrPreviousErrorIndex.value = errors.value.findIndex(
-    (error: any) => error.elementIndex <= range.end && error.elementIndex >= range.start
+    (error: any) =>
+      error.elementIndex <= range.end && error.elementIndex >= range.start
   );
 };
 
 const filteredLogs = computed(() => {
   if (!searchQuery.value) return service.value.logs;
-  
+
   const query = searchQuery.value.toLowerCase();
-  return service.value.logs.filter((log: any) => 
-    log.message.toLowerCase().includes(query) ||
-    log.level.toLowerCase().includes(query) ||
-    log.timestamp.toLowerCase().includes(query)
+  return service.value.logs.filter(
+    (log: any) =>
+      log.lines.some((line: string) => line.toLowerCase().includes(query)) ||
+      log.level.toLowerCase().includes(query) ||
+      log.timestamp.toLowerCase().includes(query)
   );
 });
 
@@ -142,7 +164,7 @@ onMounted(() => {
 const handleVirtualScrollerReady = () => {
   if (savedPosition.value !== undefined) {
     const { topIndex, offset } = savedPosition.value;
-    virtualScroller.value?.scrollToIndex(topIndex);
+    virtualScroller.value?.scrollToIndex(topIndex, offset);
     // After scrolling to the index, adjust by the offset
     nextTick(() => {
       if (virtualScroller.value?.$el) {
@@ -158,20 +180,22 @@ const handleVirtualScrollerReady = () => {
 
 onBeforeUnmount(() => {
   if (!virtualScroller.value?.$el) return;
-  
+
   const range = virtualScroller.value.getVisibleRange();
   if (!range) return;
-  
+
   const scrollTop = virtualScroller.value.$el.scrollTop;
   const firstItemTop = virtualScroller.value.getItemPosition(range.start);
   const offset = scrollTop - firstItemTop;
-  
+
   store.saveScrollPosition(
     props.serviceId,
-    isScrolledToBottom.value ? undefined : {
-      topIndex: range.start,
-      offset
-    }
+    isScrolledToBottom.value
+      ? undefined
+      : {
+          topIndex: range.start,
+          offset,
+        }
   );
 });
 
@@ -181,12 +205,12 @@ const scrollToBottom = () => {
 
 const navigateError = (error: (typeof errors.value)[number] | undefined) => {
   if (!error) return;
-  virtualScroller.value?.scrollToIndex(error.elementIndex);
+  virtualScroller.value?.scrollToIndex(error.elementIndex, 0);
 };
 
 const clearLogs = async () => {
   await store.clearLogs(props.serviceId);
-  virtualScroller.value?.scrollToIndex(0);
+  virtualScroller.value?.scrollToIndex(0, 0);
 };
 
 watch(
@@ -198,27 +222,3 @@ watch(
   }
 );
 </script>
-
-<style scoped lang="postcss">
-:deep(a) {
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: underline;
-}
-
-button:not(:disabled):hover {
-  background-color: #4b5563;
-}
-
-button.nav-buttons {
-  @apply rounded-full bg-gray-700 text-white disabled:opacity-50 flex items-center justify-center h-6 w-12;
-}
-
-input::placeholder {
-  color: #9ca3af;
-}
-
-input:focus::placeholder {
-  color: #6b7280;
-}
-</style>

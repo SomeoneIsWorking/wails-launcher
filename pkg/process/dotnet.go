@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
@@ -213,52 +212,128 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// readOutput reads from pipe
+// readOutput reads from pipe and buffers multi-line log entries
 func (ds *DotnetService) readOutput(pipe io.ReadCloser, stream string) {
 	scanner := bufio.NewScanner(pipe)
+	var buffer strings.Builder
+
+	// Matches log levels (info:, warn:, error:, debug:, trace:, critical:, fail:)
+	// or compiler output (paths with warnings/errors)
+	// or build/restore output lines
+	isLogStart := func(line string) bool {
+		if len(line) == 0 {
+			return false
+		}
+		// Skip lines that are just stream indicators
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "STDERR" || trimmed == "STDOUT" {
+			return false
+		}
+		// Check if line starts with common log prefixes (not indented)
+		if line[0] != ' ' && line[0] != '\t' {
+			lower := strings.ToLower(line)
+			if strings.HasPrefix(lower, "info:") ||
+				strings.HasPrefix(lower, "warn:") ||
+				strings.HasPrefix(lower, "error:") ||
+				strings.HasPrefix(lower, "debug:") ||
+				strings.HasPrefix(lower, "trace:") ||
+				strings.HasPrefix(lower, "critical:") ||
+				strings.HasPrefix(lower, "fail:") {
+				return true
+			}
+			// Compiler warnings/errors (start with path)
+			if strings.Contains(line, "): warning ") || strings.Contains(line, "): error ") {
+				return true
+			}
+			// NuGet warnings/errors (path : warning/error format)
+			if strings.Contains(line, " : warning ") || strings.Contains(line, " : error ") {
+				return true
+			}
+			// Build/restore messages
+			if strings.HasPrefix(line, "Build ") || strings.HasPrefix(line, "Restore ") ||
+				strings.HasPrefix(line, "Determining ") || strings.HasPrefix(line, "Building...") {
+				return true
+			}
+		}
+		return false
+	}
+
+	flushBuffer := func() {
+		if buffer.Len() > 0 {
+			ds.processLine(buffer.String(), stream)
+			buffer.Reset()
+		}
+	}
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		ds.processLine(line, stream)
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and flush buffer
+		if trimmed == "" {
+			flushBuffer()
+			continue
+		}
+
+		// Check if this line starts a new log entry
+		if isLogStart(line) {
+			// Flush any buffered content first
+			flushBuffer()
+			// Start new buffer with this line
+			buffer.WriteString(line)
+		} else if buffer.Len() > 0 {
+			// This is a continuation line, append to buffer
+			buffer.WriteString("\n")
+			buffer.WriteString(line)
+		} else {
+			// Start new buffer with this line (instead of processing immediately)
+			buffer.WriteString(line)
+		}
 	}
+
+	// Flush any remaining buffered content
+	flushBuffer()
 }
 
-// processLine processes a line of output
+// processLine processes a single log entry (may be multi-line)
 func (ds *DotnetService) processLine(line string, stream string) {
-	// Check for URL
-	if strings.Contains(line, "Now listening on") {
-		// Extract URL
+	// Check for URL in the log
+	if strings.Contains(line, "Now listening on:") {
 		parts := strings.Split(line, "Now listening on:")
-		if len(parts) > 1 {
+		if len(parts) == 2 {
 			url := strings.TrimSpace(parts[1])
 			ds.emitURL(url)
 		}
 	}
-	// Parse log
+
+	// Parse and emit log
 	entry := ds.parseLog(line, stream)
 	if entry != nil {
 		ds.emitLog(entry.Level, entry.Message, entry.Raw, entry.Stream)
 	}
 }
 
-// parseLog parses a log line
+// parseLog parses a log entry (may be multi-line)
 func (ds *DotnetService) parseLog(line string, stream string) *LogEntry {
 	if strings.Contains(line, "NETSDK1138") {
 		return nil
 	}
-	re := regexp.MustCompile(`^\[(.*?)\s+(ERR|INF|WARN|DBG).*?\]\s+(.*)`)
-	matches := re.FindStringSubmatch(line)
-	if len(matches) == 4 {
-		return &LogEntry{
-			Timestamp: matches[1],
-			Level:     LogLevel(matches[2]),
-			Message:   matches[3],
-			Raw:       line,
-			Stream:    stream,
-		}
-	}
 
+	// Determine log level from the line
 	level := Inf
-	if stream == "stderr" {
+	lower := strings.ToLower(line)
+
+	if strings.HasPrefix(lower, "error:") || strings.Contains(line, "): error ") || strings.Contains(line, " ERR]") || strings.Contains(line, " ERR ") {
+		level = Err
+	} else if strings.HasPrefix(lower, "warn:") || strings.Contains(line, "): warning ") || strings.Contains(line, ": warning ") {
+		level = Warn
+	} else if strings.HasPrefix(lower, "debug:") || strings.HasPrefix(lower, "trace:") {
+		level = Dbg
+	} else if strings.HasPrefix(lower, "info:") {
+		level = Inf
+	} else if strings.HasPrefix(lower, "critical:") || strings.HasPrefix(lower, "fail:") {
+		level = Err
+	} else if stream == "stderr" {
 		level = Err
 	}
 

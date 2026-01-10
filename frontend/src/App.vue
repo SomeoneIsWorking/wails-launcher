@@ -2,6 +2,8 @@
   <div class="flex h-screen">
     <ServiceList />
     <LogViewer />
+    <ContextMenu />
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -10,6 +12,8 @@ import { onMounted } from 'vue'
 import { useServicesStore } from "./stores/services";
 import ServiceList from "./components/ServiceList.vue";
 import LogViewer from "./components/LogViewer.vue";
+import ContextMenu from "./components/ContextMenu.vue";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
 
 const store = useServicesStore();
 

@@ -2,6 +2,8 @@ import type { LogEntry as ServerLogEntry, ServiceInfo as ServerServiceInfo } fro
 
 export interface ClientLogEntry extends ServerLogEntry {
   read?: boolean
+  lines: string[]
+  height: number
 }
 
 export interface ClientServiceInfo extends Omit<ServerServiceInfo, 'logs'> {
