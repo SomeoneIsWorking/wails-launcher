@@ -56,6 +56,19 @@
         <PlayIcon :size="16" />
       </button>
       <button
+        @click.stop="store.startServiceWithoutBuild(serviceId)"
+        :disabled="
+          service.status === 'running' ||
+          service.status === 'starting' ||
+          service.status === 'stopping' ||
+          service.status === 'initializing'
+        "
+        class="p-2 text-sm bg-purple-500 text-white rounded disabled:opacity-50 hover:bg-purple-600"
+        title="Run without building"
+      >
+        <ZapIcon :size="16" />
+      </button>
+      <button
         @click.stop="store.stopService(serviceId)"
         :disabled="
           service.status === 'stopped' ||
@@ -89,6 +102,7 @@ import {
   PlayIcon,
   SquareIcon,
   RotateCwIcon,
+  ZapIcon,
 } from "lucide-vue-next";
 
 interface Props {

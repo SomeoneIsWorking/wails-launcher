@@ -34,6 +34,8 @@ export function StartGroup(arg1:string):Promise<void>;
 
 export function StartService(arg1:string):Promise<void>;
 
+export function StartServiceWithoutBuild(arg1:string):Promise<void>;
+
 export function StopService(arg1:string):Promise<void>;
 
 export function UpdateGroup(arg1:string,arg2:string,arg3:process.ServiceEnv):Promise<void>;

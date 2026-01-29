@@ -64,6 +64,29 @@ func (ds *DotnetService) Start() error {
 	return nil
 }
 
+// StartWithoutBuild starts the service without building
+func (ds *DotnetService) StartWithoutBuild() error {
+	if ds.process != nil {
+		return fmt.Errorf("service already running")
+	}
+	ds.emitStatus(Starting)
+	err := ds.cleanup()
+	if err != nil {
+		ds.emitStatus(Error)
+		return err
+	}
+	cmd, err := ds.spawnWithoutBuild()
+	if err != nil {
+		ds.emitLog(Err, fmt.Sprintf("Failed to spawn process: %v", err), "", "stdout")
+		ds.emitStatus(Error)
+		return err
+	}
+	ds.process = cmd
+	ds.emitStatus(Initializing)
+	go ds.monitorProcess()
+	return nil
+}
+
 // Stop stops the service
 func (ds *DotnetService) Stop() error {
 	if ds.process == nil {
@@ -191,6 +214,41 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 	}
 
 	cmd, err := bridge.CreateCommand([]string{dotnetPath, "run"}, env, ds.path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bridge command: %v", err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	go ds.readOutput(stdout, "stdout")
+	go ds.readOutput(stderr, "stderr")
+	return cmd, nil
+}
+
+// spawnWithoutBuild spawns the dotnet process without building
+func (ds *DotnetService) spawnWithoutBuild() (*exec.Cmd, error) {
+	dotnetPath, err := executablesearch.FindExecutable("dotnet")
+	if err != nil {
+		return nil, fmt.Errorf("dotnet not found: %v", err)
+	}
+	ds.emitLog(Inf, fmt.Sprintf("Using dotnet at: %s", dotnetPath), "", "stdout")
+
+	env := os.Environ()
+	for k, v := range ds.env {
+		env = append(env, k+"="+v)
+	}
+
+	cmd, err := bridge.CreateCommand([]string{dotnetPath, "run", "--no-build"}, env, ds.path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge command: %v", err)
 	}

@@ -66,6 +66,29 @@ func (ns *NpmService) Start() error {
 	return nil
 }
 
+// StartWithoutBuild starts the service without building
+func (ns *NpmService) StartWithoutBuild() error {
+	if ns.process != nil {
+		return fmt.Errorf("service already running")
+	}
+	ns.emitStatus(Starting)
+	err := ns.cleanup()
+	if err != nil {
+		ns.emitStatus(Error)
+		return err
+	}
+	cmd, err := ns.spawnWithoutBuild()
+	if err != nil {
+		ns.emitLog(Err, fmt.Sprintf("Failed to spawn process: %v", err), "", "stdout")
+		ns.emitStatus(Error)
+		return err
+	}
+	ns.process = cmd
+	ns.emitStatus(Initializing)
+	go ns.monitorProcess()
+	return nil
+}
+
 // Stop stops the service
 func (ns *NpmService) Stop() error {
 	if ns.process == nil {
@@ -208,6 +231,56 @@ func (ns *NpmService) spawn() (*exec.Cmd, error) {
 	}
 
 	cmd, err := bridge.CreateCommand([]string{npmPath, "run", "dev"}, env, ns.path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bridge command: %v", err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	go ns.readOutput(stdout, "stdout")
+	go ns.readOutput(stderr, "stderr")
+	return cmd, nil
+}
+
+// spawnWithoutBuild spawns the npm process without building
+func (ns *NpmService) spawnWithoutBuild() (*exec.Cmd, error) {
+	npmPath, err := executablesearch.FindExecutable("npm")
+	if err != nil {
+		return nil, fmt.Errorf("npm not found: %v", err)
+	}
+	ns.emitLog(Inf, fmt.Sprintf("Using npm at: %s", npmPath), "", "stdout")
+
+	env := os.Environ()
+
+	// Update PATH to include npm's directory, so it can find node
+	npmDir := filepath.Dir(npmPath)
+	pathFound := false
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + npmDir + ":" + strings.TrimPrefix(e, "PATH=")
+			pathFound = true
+			break
+		}
+	}
+	if !pathFound {
+		env = append(env, "PATH="+npmDir)
+	}
+
+	for k, v := range ns.env {
+		env = append(env, k+"="+v)
+	}
+
+	cmd, err := bridge.CreateCommand([]string{npmPath, "start"}, env, ns.path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge command: %v", err)
 	}

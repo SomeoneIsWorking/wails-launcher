@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"wails-launcher/pkg/executablesearch"
 )
 
@@ -34,8 +35,8 @@ func CreateCommand(originalCmd []string, env []string, workDir string) (*exec.Cm
 
 	// 4. Construct arguments
 	parentPid := os.Getpid()
-	args := []string{scriptPath, "--parent-pid", fmt.Sprint(parentPid), "--cmd"}
-	args = append(args, originalCmd...)
+	cmdStr := strings.Join(originalCmd, " ")
+	args := []string{scriptPath, "--parent-pid", fmt.Sprint(parentPid), "--cmd", cmdStr}
 
 	// 5. Initialize command
 	cmd := exec.Command(pythonPath, args...)

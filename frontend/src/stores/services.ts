@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { MAX_LOGS } from "@/constants";
 import type { ServiceConfig, ServiceInfo } from "@/types/service";
 import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
-import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
+import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StartServiceWithoutBuild, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 import { process } from 'wailsjs/go/models.js';
 
@@ -199,6 +199,22 @@ export const useServicesStore = defineStore("services", () => {
     }
   }
 
+  async function startServiceWithoutBuild(id: string) {
+    const serviceRef = services.value[id];
+    if (serviceRef) {
+      serviceRef.status = "starting";
+    }
+
+    try {
+      await StartServiceWithoutBuild(id);
+    } catch (error) {
+      if (serviceRef) {
+        serviceRef.status = "error";
+      }
+      console.error("Failed to start service without build:", error);
+    }
+  }
+
   async function stopService(id: string) {
     const serviceRef = services.value[id];
     if (!serviceRef) {
@@ -280,6 +296,7 @@ export const useServicesStore = defineStore("services", () => {
     selectedGroup,
     selectedGroupId,
     startService,
+    startServiceWithoutBuild,
     stopService,
     restartService,
     selectService,

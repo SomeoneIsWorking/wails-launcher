@@ -5,6 +5,7 @@ import subprocess
 import signal
 import argparse
 import platform
+import shlex
 
 process = None
 
@@ -45,11 +46,11 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process Bridge')
     parser.add_argument('--parent-pid', type=int, required=True, help='Parent PID to monitor')
-    parser.add_argument('--cmd', nargs='+', required=True, help='Command to run')
+    parser.add_argument('--cmd', type=str, required=True, help='Command to run')
     args = parser.parse_args()
 
     parent_pid = args.parent_pid
-    cmd = args.cmd
+    cmd = shlex.split(args.cmd)
 
     # Start the child process
     kwargs = {}

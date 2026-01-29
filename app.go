@@ -153,6 +153,17 @@ func (a *App) StartService(id string) error {
 	return srv.Start()
 }
 
+// StartServiceWithoutBuild starts a service without building
+func (a *App) StartServiceWithoutBuild(id string) error {
+	a.mu.RLock()
+	srv, exists := a.services[id]
+	a.mu.RUnlock()
+	if !exists {
+		return fmt.Errorf("service not found")
+	}
+	return srv.StartWithoutBuild()
+}
+
 // StopService stops a service
 func (a *App) StopService(id string) error {
 	a.mu.RLock()

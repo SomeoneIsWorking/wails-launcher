@@ -62,6 +62,10 @@ export function StartService(arg1) {
   return window['go']['main']['App']['StartService'](arg1);
 }
 
+export function StartServiceWithoutBuild(arg1) {
+  return window['go']['main']['App']['StartServiceWithoutBuild'](arg1);
+}
+
 export function StopService(arg1) {
   return window['go']['main']['App']['StopService'](arg1);
 }

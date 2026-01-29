@@ -162,6 +162,11 @@ func (s *Service) Start() error {
 	return s.processManager.Start()
 }
 
+// StartWithoutBuild starts the service without building
+func (s *Service) StartWithoutBuild() error {
+	return s.processManager.StartWithoutBuild()
+}
+
 // Stop stops the service
 func (s *Service) Stop() error {
 	return s.processManager.Stop()
