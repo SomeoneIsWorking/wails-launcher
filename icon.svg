@@ -1,0 +1,33 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="224" fill="url(#bg_gradient)"/>
+  
+  <defs>
+    <linearGradient id="bg_gradient" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)" transform="rotate(15 512 512) translate(35, 0)">
+    <!-- Rocket Body -->
+    <path d="M512 160C512 160 384 320 384 512V704H640V512C640 320 512 160 512 160Z" fill="white"/>
+    <!-- Fins -->
+    <path d="M384 600L288 736H384V600Z" fill="#93C5FD"/>
+    <path d="M640 600L736 736H640V600Z" fill="#93C5FD"/>
+    <!-- Window -->
+    <circle cx="512" cy="416" r="48" fill="#1E3A8A"/>
+    <!-- Exhaust Flames -->
+    <path d="M448 704C448 704 420 832 512 900C604 832 576 704 576 704H448Z" fill="#F87171"/>
+    <path d="M480 704C480 704 472 784 512 832C552 784 544 704 544 704H480Z" fill="#FBBF24"/>
+    
+    <!-- Speed Lines to emphasize "Launching" -->
+    <rect x="352" y="768" width="16" height="128" rx="8" fill="white" opacity="0.3"/>
+    <rect x="656" y="768" width="16" height="128" rx="8" fill="white" opacity="0.3"/>
+    <rect x="400" y="816" width="12" height="64" rx="6" fill="white" opacity="0.2"/>
+    <rect x="612" y="816" width="12" height="64" rx="6" fill="white" opacity="0.2"/>
+    
+  </g>
+</svg>
