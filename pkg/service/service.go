@@ -19,6 +19,7 @@ type ServiceInfo struct {
 	Env          config.ServiceEnv     `json:"env"`
 	InheritedEnv config.ServiceEnv     `json:"inheritedEnv"`
 	Type         string                `json:"type"`
+	Profile      string                `json:"profile"`
 }
 
 // Service represents a service
@@ -63,10 +64,10 @@ func NewService(id string, config config.ServiceConfig, inheritedEnv config.Serv
 	}
 
 	if config.Type == "npm" {
-		service.processManager = process.NewNpmService(config.Path, mergedEnv)
+		service.processManager = process.NewNpmService(config.Path, mergedEnv, config.Profile)
 	} else {
 		// Default to dotnet for backward compatibility
-		service.processManager = process.NewDotnetService(config.Path, mergedEnv)
+		service.processManager = process.NewDotnetService(config.Path, mergedEnv, config.Profile)
 	}
 
 	go service.listenEvents()
@@ -138,7 +139,7 @@ func (s *Service) UpdateConfig(config config.ServiceConfig, inheritedEnv config.
 			mergedEnv[k] = v
 		}
 	}
-	s.processManager.UpdateConfig(config.Path, mergedEnv)
+	s.processManager.UpdateConfig(config.Path, mergedEnv, config.Profile)
 }
 
 // GetInfo returns service information
@@ -154,6 +155,7 @@ func (s *Service) GetInfo() ServiceInfo {
 		Env:          s.Config.Env,
 		InheritedEnv: s.InheritedEnv,
 		Type:         s.Config.Type,
+		Profile:      s.Config.Profile,
 	}
 }
 

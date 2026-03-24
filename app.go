@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"wails-launcher/pkg/config"
@@ -316,6 +319,34 @@ func (a *App) ImportProject(groupId string, path string, projectType string) err
 	}
 
 	return nil
+}
+
+// GetLaunchProfiles reads Properties/launchSettings.json for a dotnet project
+// and returns the available profile names.
+func (a *App) GetLaunchProfiles(projectPath string) ([]string, error) {
+	fmt.Printf("GetLaunchProfiles called for: %s\n", projectPath)
+	settingsPath := filepath.Join(projectPath, "Properties", "launchSettings.json")
+	fmt.Printf("Looking for settings at: %s\n", settingsPath)
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	var settings struct {
+		Profiles map[string]json.RawMessage `json:"profiles"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(settings.Profiles))
+	for name := range settings.Profiles {
+		names = append(names, name)
+	}
+	return names, nil
 }
 
 // Browse opens a file dialog and returns the selected path

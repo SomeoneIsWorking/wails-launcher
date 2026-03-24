@@ -27,7 +27,7 @@ type NpmService struct {
 }
 
 // NewNpmService creates a new NpmService
-func NewNpmService(path string, env ServiceEnv) *NpmService {
+func NewNpmService(path string, env ServiceEnv, _ string) *NpmService {
 	return &NpmService{
 		path:       path,
 		env:        env,
@@ -38,7 +38,7 @@ func NewNpmService(path string, env ServiceEnv) *NpmService {
 }
 
 // UpdateConfig updates the config
-func (ns *NpmService) UpdateConfig(path string, env ServiceEnv) {
+func (ns *NpmService) UpdateConfig(path string, env ServiceEnv, _ string) {
 	ns.path = path
 	ns.env = env
 }

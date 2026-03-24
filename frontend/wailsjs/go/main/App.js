@@ -34,6 +34,10 @@ export function GetGroups() {
   return window['go']['main']['App']['GetGroups']();
 }
 
+export function GetLaunchProfiles(arg1) {
+  return window['go']['main']['App']['GetLaunchProfiles'](arg1);
+}
+
 export function GetService(arg1) {
   return window['go']['main']['App']['GetService'](arg1);
 }
