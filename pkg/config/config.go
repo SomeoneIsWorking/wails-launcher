@@ -13,10 +13,11 @@ type ServiceEnv = process.ServiceEnv
 
 // ServiceConfig represents service configuration
 type ServiceConfig struct {
-	Name string     `json:"name"`
-	Path string     `json:"path"`
-	Env  ServiceEnv `json:"env"`
-	Type string     `json:"type"` // "dotnet", "npm", etc.
+	Name    string     `json:"name"`
+	Path    string     `json:"path"`
+	Env     ServiceEnv `json:"env"`
+	Type    string     `json:"type"`    // "dotnet", "npm", etc.
+	Profile string     `json:"profile"` // dotnet launch profile name; empty = --no-launch-profile
 }
 
 // GroupConfig represents group configuration

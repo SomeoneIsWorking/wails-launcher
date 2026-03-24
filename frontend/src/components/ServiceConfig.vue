@@ -26,6 +26,7 @@
         <select
           v-model="form.type"
           class="v-select"
+          @change="onTypeChange"
         >
           <option value="dotnet">.NET Run</option>
           <option value="npm">NPM Run Dev</option>
@@ -47,7 +48,23 @@
           v-model="form.path"
           type="text"
           class="v-input"
+          @blur="onPathBlur"
         />
+      </div>
+
+      <!-- Launch profile selector – dotnet only -->
+      <div v-if="form.type === 'dotnet'">
+        <label class="block text-sm font-medium mb-1">
+          Launch Profile
+          <span class="text-xs text-gray-400 font-normal ml-1">(from launchSettings.json)</span>
+        </label>
+        <select v-model="form.profile" class="v-select" :disabled="profiles.length === 0">
+          <option value="">— None —</option>
+          <option v-for="p in profiles" :key="p" :value="p">{{ p }}</option>
+        </select>
+        <p v-if="form.path && profiles.length === 0" class="text-xs text-gray-400 mt-1">
+          No launchSettings.json found at this path.
+        </p>
       </div>
 
       <EnvVariables
@@ -74,11 +91,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { map } from "lodash-es";
 import { useServicesStore } from "@/stores/services";
 import EnvVariables from "./EnvVariables.vue";
 import VDialog from "./VDialog.vue";
+import { GetLaunchProfiles } from "../../wailsjs/go/main/App";
 
 const store = useServicesStore();
 
@@ -89,8 +107,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
+
 const form = ref(setup());
 const selectedGroupId = ref("");
+const profiles = ref<string[]>([]);
 
 const inheritedEnv = computed(() => {
   if (props.serviceId === "new") {
@@ -102,25 +122,60 @@ const inheritedEnv = computed(() => {
   return service?.inheritedEnv || {};
 });
 
+// Load profiles whenever path changes (and type is dotnet)
+async function loadProfiles(path: string, type: string) {
+  if (!path || type !== "dotnet") {
+    profiles.value = [];
+    return;
+  }
+  try {
+    const fetched = await GetLaunchProfiles(path);
+    console.log("Found profiles:", fetched);
+    profiles.value = fetched;
+  } catch (err) {
+    console.error("Failed to load profiles:", err);
+    profiles.value = [];
+  }
+}
+
+watch(() => form.value.path, (path) => loadProfiles(path, form.value.type));
+watch(() => form.value.type, (type) => loadProfiles(form.value.path, type));
+
+// Trigger load on blur so user can paste a path without typing
+function onPathBlur() {
+  loadProfiles(form.value.path, form.value.type);
+}
+
+function onTypeChange() {
+  form.value.profile = "";
+  loadProfiles(form.value.path, form.value.type);
+}
+
 function setup() {
   const value = props.serviceId;
   if (value === "new") {
-    return { name: "", path: "", env: [], type: "dotnet" };
+    return { name: "", path: "", env: [], type: "dotnet", profile: "" };
   }
   const service = store.services[value];
   if (!service) {
     throw new Error(`Service with id ${value} not found`);
   }
-  return {
+  const result = {
     name: service.name,
     path: service.path,
     type: service.type || "dotnet",
+    profile: service.profile || "",
     env: map(Object.entries(service.env), ([key, value], index) => ({
       index,
       key,
       value,
     })),
   };
+  // Load profiles for existing services immediately after result is defined
+  const servicePath = result.path;
+  const serviceType = result.type;
+  setTimeout(() => loadProfiles(servicePath, serviceType), 0);
+  return result;
 }
 
 function toModel() {
@@ -128,11 +183,13 @@ function toModel() {
     name: form.value.name,
     path: form.value.path,
     type: form.value.type,
+    profile: form.value.profile,
     env: Object.fromEntries(
       form.value.env.map(({ key, value }) => [key, value])
     ),
   };
 }
+
 async function save() {
   if (!props.serviceId) {
     throw new Error("serviceId is required");

@@ -138,6 +138,7 @@ export const useServicesStore = defineStore("services", () => {
       env: service.Config.env,
       inheritedEnv: service.InheritedEnv,
       type: service.Config.type,
+      profile: service.Config.profile,
     });
     services.value[id] = clientService;
     if (!selectedService.value) {

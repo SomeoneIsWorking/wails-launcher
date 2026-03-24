@@ -5,6 +5,6 @@ type ServiceManager interface {
 	Start() error
 	StartWithoutBuild() error
 	Stop() error
-	UpdateConfig(path string, env ServiceEnv)
+	UpdateConfig(path string, env ServiceEnv, profile string)
 	GetChannels() (<-chan LogEntry, <-chan string, <-chan ServiceStatus)
 }

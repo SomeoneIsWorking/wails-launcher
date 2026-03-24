@@ -18,6 +18,7 @@ import (
 type DotnetService struct {
 	path       string
 	env        ServiceEnv
+	profile    string // launch profile name; empty = --no-launch-profile
 	process    *exec.Cmd
 	logChan    chan LogEntry
 	urlChan    chan string
@@ -25,10 +26,11 @@ type DotnetService struct {
 }
 
 // NewDotnetService creates a new DotnetService
-func NewDotnetService(path string, env ServiceEnv) *DotnetService {
+func NewDotnetService(path string, env ServiceEnv, profile string) *DotnetService {
 	return &DotnetService{
 		path:       path,
 		env:        env,
+		profile:    profile,
 		logChan:    make(chan LogEntry, 100),
 		urlChan:    make(chan string, 10),
 		statusChan: make(chan ServiceStatus, 10),
@@ -36,9 +38,10 @@ func NewDotnetService(path string, env ServiceEnv) *DotnetService {
 }
 
 // UpdateConfig updates the config
-func (ds *DotnetService) UpdateConfig(path string, env ServiceEnv) {
+func (ds *DotnetService) UpdateConfig(path string, env ServiceEnv, profile string) {
 	ds.path = path
 	ds.env = env
+	ds.profile = profile
 }
 
 // Start starts the service
@@ -213,7 +216,11 @@ func (ds *DotnetService) spawn() (*exec.Cmd, error) {
 		env = append(env, k+"="+v)
 	}
 
-	cmd, err := bridge.CreateCommand([]string{dotnetPath, "run"}, env, ds.path)
+	args := []string{dotnetPath, "run"}
+	if ds.profile != "" {
+		args = append(args, "--launch-profile", ds.profile)
+	}
+	cmd, err := bridge.CreateCommand(args, env, ds.path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge command: %v", err)
 	}
@@ -248,7 +255,11 @@ func (ds *DotnetService) spawnWithoutBuild() (*exec.Cmd, error) {
 		env = append(env, k+"="+v)
 	}
 
-	cmd, err := bridge.CreateCommand([]string{dotnetPath, "run", "--no-build"}, env, ds.path)
+	args := []string{dotnetPath, "run", "--no-build"}
+	if ds.profile != "" {
+		args = append(args, "--launch-profile", ds.profile)
+	}
+	cmd, err := bridge.CreateCommand(args, env, ds.path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge command: %v", err)
 	}

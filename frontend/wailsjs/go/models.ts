@@ -5,6 +5,7 @@ export namespace config {
 	    path: string;
 	    env: Record<string, string>;
 	    type: string;
+	    profile: string;
 	}
 
 }
@@ -40,6 +41,7 @@ export namespace service {
 	    env: Record<string, string>;
 	    inheritedEnv: Record<string, string>;
 	    type: string;
+	    profile: string;
 	}
 
 }

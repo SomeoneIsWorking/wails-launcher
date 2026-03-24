@@ -20,6 +20,8 @@ export function EmitToFrontend(arg1:string,arg2:string,arg3:any):Promise<void>;
 
 export function GetGroups():Promise<Record<string, config.GroupConfig>>;
 
+export function GetLaunchProfiles(arg1:string):Promise<Array<string>>;
+
 export function GetService(arg1:string):Promise<service.ServiceInfo>;
 
 export function GetServices():Promise<Record<string, service.ServiceInfo>>;
