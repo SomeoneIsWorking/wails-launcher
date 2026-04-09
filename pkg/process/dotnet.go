@@ -2,11 +2,13 @@ package process
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"wails-launcher/pkg/bridge"
@@ -20,6 +22,7 @@ type DotnetService struct {
 	env        ServiceEnv
 	profile    string // launch profile name; empty = --no-launch-profile
 	process    *exec.Cmd
+	mu         sync.Mutex
 	logChan    chan LogEntry
 	urlChan    chan string
 	statusChan chan ServiceStatus
@@ -46,9 +49,12 @@ func (ds *DotnetService) UpdateConfig(path string, env ServiceEnv, profile strin
 
 // Start starts the service
 func (ds *DotnetService) Start() error {
+	ds.mu.Lock()
 	if ds.process != nil {
+		ds.mu.Unlock()
 		return fmt.Errorf("service already running")
 	}
+	ds.mu.Unlock()
 	ds.emitStatus(Starting)
 	err := ds.cleanup()
 	if err != nil {
@@ -61,7 +67,9 @@ func (ds *DotnetService) Start() error {
 		ds.emitStatus(Error)
 		return err
 	}
+	ds.mu.Lock()
 	ds.process = cmd
+	ds.mu.Unlock()
 	ds.emitStatus(Initializing)
 	go ds.monitorProcess()
 	return nil
@@ -69,9 +77,12 @@ func (ds *DotnetService) Start() error {
 
 // StartWithoutBuild starts the service without building
 func (ds *DotnetService) StartWithoutBuild() error {
+	ds.mu.Lock()
 	if ds.process != nil {
+		ds.mu.Unlock()
 		return fmt.Errorf("service already running")
 	}
+	ds.mu.Unlock()
 	ds.emitStatus(Starting)
 	err := ds.cleanup()
 	if err != nil {
@@ -84,7 +95,9 @@ func (ds *DotnetService) StartWithoutBuild() error {
 		ds.emitStatus(Error)
 		return err
 	}
+	ds.mu.Lock()
 	ds.process = cmd
+	ds.mu.Unlock()
 	ds.emitStatus(Initializing)
 	go ds.monitorProcess()
 	return nil
@@ -92,24 +105,38 @@ func (ds *DotnetService) StartWithoutBuild() error {
 
 // Stop stops the service
 func (ds *DotnetService) Stop() error {
-	if ds.process == nil {
+	ds.mu.Lock()
+	proc := ds.process
+	ds.mu.Unlock()
+
+	if proc == nil {
 		ds.emitStatus(Stopped)
 		return nil
 	}
 	ds.emitStatus(Stopping)
 
 	// Send interrupt signal to bridge to allow it to kill children
-	ds.process.Process.Signal(os.Interrupt)
+	if proc.Process != nil {
+		proc.Process.Signal(os.Interrupt)
+	}
 
 	// Give it a moment to cleanup
 	time.Sleep(500 * time.Millisecond)
 
-	err := ds.process.Process.Kill()
-	if err != nil {
-		return err
+	if proc.Process != nil {
+		err := proc.Process.Kill()
+		if err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return err
+		}
 	}
-	ds.process.Wait()
-	ds.process = nil
+	proc.Wait()
+
+	ds.mu.Lock()
+	if ds.process == proc {
+		ds.process = nil
+	}
+	ds.mu.Unlock()
+
 	ds.emitStatus(Stopped)
 	return nil
 }
@@ -417,11 +444,21 @@ func (ds *DotnetService) parseLog(line string, stream string) *LogEntry {
 
 // monitorProcess monitors the process
 func (ds *DotnetService) monitorProcess() {
-	if ds.process == nil {
+	ds.mu.Lock()
+	proc := ds.process
+	ds.mu.Unlock()
+
+	if proc == nil {
 		return
 	}
-	err := ds.process.Wait()
-	ds.process = nil
+	err := proc.Wait()
+
+	ds.mu.Lock()
+	if ds.process == proc {
+		ds.process = nil
+	}
+	ds.mu.Unlock()
+
 	status := Stopped
 	if err != nil {
 		status = Error

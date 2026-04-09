@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -39,11 +40,12 @@ type ServiceInfo = service.ServiceInfo
 
 // App struct
 type App struct {
-	ctx      context.Context
-	services map[string]*service.Service
-	groups   *group.Manager
-	config   *config.Config
-	mu       sync.RWMutex
+	ctx        context.Context
+	services   map[string]*service.Service
+	groups     *group.Manager
+	config     *config.Config
+	mu         sync.RWMutex
+	httpServer *http.Server
 }
 
 // EmitToFrontend emits an event to the frontend
@@ -76,6 +78,14 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.startHTTPServer(ctx)
+}
+
+// shutdown is called when the app closes
+func (a *App) shutdown(ctx context.Context) {
+	if a.httpServer != nil {
+		a.httpServer.Shutdown(ctx) //nolint:errcheck
+	}
 }
 
 // loadServices loads services from configuration
@@ -176,6 +186,14 @@ func (a *App) StopService(id string) error {
 		return fmt.Errorf("service not found")
 	}
 	return srv.Stop()
+}
+
+// RestartService stops then starts a service
+func (a *App) RestartService(id string) error {
+	if err := a.StopService(id); err != nil {
+		return err
+	}
+	return a.StartService(id)
 }
 
 // ClearLogs clears logs for a service
