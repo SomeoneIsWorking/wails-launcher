@@ -32,6 +32,8 @@ export function ImportSLN(arg1:string):Promise<void>;
 
 export function ReloadServices():Promise<void>;
 
+export function RestartService(arg1:string):Promise<void>;
+
 export function StartGroup(arg1:string):Promise<void>;
 
 export function StartService(arg1:string):Promise<void>;

@@ -58,6 +58,10 @@ export function ReloadServices() {
   return window['go']['main']['App']['ReloadServices']();
 }
 
+export function RestartService(arg1) {
+  return window['go']['main']['App']['RestartService'](arg1);
+}
+
 export function StartGroup(arg1) {
   return window['go']['main']['App']['StartGroup'](arg1);
 }
