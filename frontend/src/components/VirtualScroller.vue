@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { ClientLogEntry } from "@/types/client";
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -212,6 +212,21 @@ onMounted(() => {
   nextTick(() => {
     emit("ready");
   });
+
+  // Re-run updatePool when the container is resized (height change affects
+  // how many items are visible; width change is handled by the parent which
+  // recalculates item heights and triggers the items-length watcher).
+  if (scrollerRef.value) {
+    const ro = new ResizeObserver(() => updatePool());
+    ro.observe(scrollerRef.value);
+    onUnmounted(() => ro.disconnect());
+  }
+});
+
+// Re-run updatePool whenever total height changes — this covers both new items
+// arriving and height mutations from wrap/resize recalculation.
+watch(totalHeight, () => {
+  updatePool();
 });
 
 // Watch items array for any changes (additions, removals, or replacements)

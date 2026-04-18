@@ -7,7 +7,13 @@
     "
     @intersection="markLogAsRead"
   >
-    <div :class="logLevelClass">
+    <!-- Raw mode: plain text, no link processing -->
+    <div v-if="showRaw" :class="[logLevelClass, wrap ? 'border-b border-gray-700/20' : '']" class="opacity-75">
+      {{ log.raw }}
+    </div>
+
+    <!-- Parsed mode: URL / file-path segments highlighted -->
+    <div v-else :class="[logLevelClass, wrap ? 'border-b border-gray-700/20' : '']">
       <div v-for="(segmentItems, index) in processedContent" :key="index">
         <template v-for="segment in segmentItems">
           <a
@@ -41,6 +47,8 @@ const props = defineProps<{
   serviceName: string;
   servicePath?: string;
   commonBasePath?: string;
+  showRaw?: boolean;
+  wrap?: boolean;
 }>();
 
 const logLevelClass = computed(
@@ -77,8 +85,16 @@ const createVscodeUrl = (filePath: string, lineNumber?: string) => {
 const processLogContent = (content: string): ContentSegment[] => {
   const segments: ContentSegment[] = [];
   const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  // Matches both absolute paths (/foo/bar/File.cs) and relative paths
+  // (Namespace.Name/Dir/File.cs), followed by an optional location suffix in
+  // either `:line N` or ` (N,M)` format.
+  //
+  // Group 1 — file path
+  // Group 2 — line number from `:line N`
+  // Group 3 — line number from `(N,M)`
   const fileRegex =
-    /([/\\][\w\s\-.@/\\]+[/\\][\w\s\-.@/\\]+\.[\w]+)(?::line (\d+))?/g;
+    /((?:[/\\]|(?=[\w][\w.\-@]*[/\\]))[\w\s\-.@/\\]+[/\\][\w\s\-.@]+\.[\w]{1,6})(?::line (\d+)|\s*\((\d+),\d+\))?/g;
 
   let lastIndex = 0;
   const matches: Array<{
@@ -104,16 +120,25 @@ const processLogContent = (content: string): ContentSegment[] => {
   // Find all file path matches
   while ((match = fileRegex.exec(content)) !== null) {
     const filePath = match[1];
-    const lineNumber = match[2];
+    // Accept line number from either `:line N` (group 2) or `(N,M)` (group 3)
+    const lineNumber = match[2] ?? match[3];
     const trimmedPath = filePath.trim();
 
+    // Resolve relative paths against commonBasePath so VS Code can open them
+    const absPath =
+      trimmedPath.startsWith("/") || /^[A-Za-z]:/.test(trimmedPath)
+        ? trimmedPath
+        : props.commonBasePath
+          ? `${props.commonBasePath}/${trimmedPath}`
+          : trimmedPath;
+
     let displayPath = match[0];
-    if (props.commonBasePath && trimmedPath.startsWith(props.commonBasePath)) {
-      const relativePath = trimmedPath
+    if (props.commonBasePath && absPath.startsWith(props.commonBasePath)) {
+      const relativePath = absPath
         .substring(props.commonBasePath.length)
         .replace(/^\//, "");
       displayPath = lineNumber
-        ? `${relativePath}:line ${lineNumber}`
+        ? `${relativePath}:${lineNumber}`
         : relativePath;
     }
 
@@ -123,7 +148,7 @@ const processLogContent = (content: string): ContentSegment[] => {
       segment: {
         type: "file",
         text: displayPath,
-        url: createVscodeUrl(trimmedPath, lineNumber),
+        url: createVscodeUrl(absPath, lineNumber),
       },
     });
   }

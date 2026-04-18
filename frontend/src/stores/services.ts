@@ -28,6 +28,8 @@ export const useServicesStore = defineStore("services", () => {
   const selectedServiceId = ref<string | null>(null);
   const selectedGroupId = ref<string | null>(null);
   const scrollPositions = ref<Record<string, ScrollPosition | undefined>>({});
+  const wrapLogs = ref(false);
+  const showRaw = ref(false);
   const selectedService = computed(() =>
     selectedServiceId.value ? services.value[selectedServiceId.value] : null
   );
@@ -320,6 +322,8 @@ export const useServicesStore = defineStore("services", () => {
     importProject,
     saveScrollPosition,
     getScrollPosition,
+    wrapLogs,
+    showRaw,
   };
 });
 
