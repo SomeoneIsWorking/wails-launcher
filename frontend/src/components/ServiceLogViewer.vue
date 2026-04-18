@@ -2,6 +2,8 @@
   <div class="flex-1 flex flex-col overflow-y-hidden relative">
     <LogViewerControls
       v-model:search-query="searchQuery"
+      v-model:wrap="wrapLogs"
+      v-model:show-raw="showRaw"
       :errors="errors"
       :errors-above="errorsAbove"
       :errors-below="errorsBelow"
@@ -14,7 +16,7 @@
       :items="filteredLogs"
       @scroll="handleScroll"
       @ready="handleVirtualScrollerReady"
-      class="text-[0.8rem] whitespace-pre leading-5"
+      :class="['text-[0.8rem] leading-5', wrapLogs ? 'whitespace-pre-wrap break-all' : 'whitespace-pre']"
     >
       <template #default="{ item: log, index: _index }">
         <LogEntry
@@ -22,6 +24,8 @@
           :service-name="service.name"
           :service-path="service.path"
           :common-base-path="commonBasePath"
+          :show-raw="showRaw"
+          :wrap="wrapLogs"
         />
       </template>
     </VirtualScroller>
@@ -43,9 +47,11 @@ import {
   onMounted,
   watch,
   onBeforeUnmount,
+  onUnmounted,
 } from "vue";
 import { ChevronDown } from "lucide-vue-next";
 import { useServicesStore } from "@/stores/services";
+import { storeToRefs } from "pinia";
 import type { ComponentInstance } from "vue";
 import VirtualScroller from "./VirtualScroller.vue";
 import type { ClientLogEntry, ScrollPosition } from "@/types/client";
@@ -60,6 +66,98 @@ const service = computed(() => store.services[props.serviceId]);
 const virtualScroller = ref<ComponentInstance<typeof VirtualScroller>>();
 const isScrolledToBottom = ref(true);
 const currentOrPreviousErrorIndex = ref(-1);
+const { wrapLogs, showRaw } = storeToRefs(store);
+
+// ── Dynamic height calculation for wrapped text ───────────────────────────
+//
+// Each ClientLogEntry carries a `height` field used by VirtualScroller to
+// position items absolutely. When text wraps, the real height depends on the
+// container width, so we measure it and recompute on every resize.
+
+const LINE_HEIGHT = 20; // matches leading-5 (1.25rem at 16px base)
+const SEPARATOR_PX = 1; // matches border-b separator shown when wrapping
+const charWidth = ref(0);
+const containerWidth = ref(0);
+
+// Available text columns given the current container width.
+// VirtualScroller's inner container has p-4 (16 px each side = 32 px total).
+const charsPerLine = computed(() =>
+  charWidth.value > 0 && containerWidth.value > 0
+    ? Math.max(1, Math.floor((containerWidth.value - 32) / charWidth.value))
+    : 0
+);
+
+/** Measure the width of a single monospace character using a DOM span. */
+function measureCharWidth(el: HTMLElement): number {
+  const span = document.createElement("span");
+  span.style.cssText =
+    "position:absolute;top:-9999px;left:-9999px;visibility:hidden;white-space:pre;";
+  const style = window.getComputedStyle(el);
+  span.style.fontSize = style.fontSize;
+  span.style.fontFamily = style.fontFamily;
+  span.textContent = "M".repeat(100);
+  document.body.appendChild(span);
+  const width = span.getBoundingClientRect().width / 100;
+  document.body.removeChild(span);
+  return width || 8;
+}
+
+/** Compute the pixel height of one log entry given the current column count. */
+function computeEntryHeight(lines: string[], cpl: number): number {
+  // When wrapping is off every logical line occupies exactly one visual row.
+  if (!wrapLogs.value || cpl <= 0) return lines.length * LINE_HEIGHT;
+  const rows = lines.reduce(
+    (sum, line) => sum + Math.max(1, Math.ceil((line.length || 1) / cpl)),
+    0
+  );
+  return rows * LINE_HEIGHT + SEPARATOR_PX;
+}
+
+/** Snap visible item heights to their actual rendered offsetHeight. */
+function correctVisibleHeights() {
+  const scrollerEl = virtualScroller.value?.$el as HTMLElement | null;
+  if (!scrollerEl) return;
+  scrollerEl.querySelectorAll<HTMLElement>("[data-index]").forEach((itemEl) => {
+    const idx = parseInt(itemEl.dataset.index ?? "-1");
+    const log = filteredLogs.value[idx];
+    if (!log) return;
+    const actual = itemEl.offsetHeight;
+    if (actual > 0 && log.height !== actual) log.height = actual;
+  });
+}
+
+/** Recompute heights for every log of the current service. */
+async function recalculateAllHeights() {
+  const cpl = charsPerLine.value;
+  if (cpl <= 0) return;
+  for (const log of service.value.logs) {
+    log.height = computeEntryHeight(log.lines, cpl);
+  }
+  await nextTick();
+  correctVisibleHeights();
+}
+
+// Recalculate whenever charsPerLine changes (container resized) or wrap is toggled.
+watch([charsPerLine, wrapLogs], recalculateAllHeights);
+
+// Recalculate the height of newly arriving log entries.
+watch(
+  () => service.value.logs.length,
+  (newLen, oldLen) => {
+    const cpl = charsPerLine.value;
+    if (cpl <= 0 || newLen <= (oldLen ?? 0)) return;
+    for (let i = oldLen ?? 0; i < newLen; i++) {
+      const log = service.value.logs[i];
+      log.height = computeEntryHeight(log.lines, cpl);
+    }
+  }
+);
+
+let resizeObserver: ResizeObserver | null = null;
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+});
 
 const errors = computed(() =>
   service.value.logs
@@ -73,7 +171,8 @@ const errorsBelow = ref<typeof errors.value>([]);
 const searchQuery = ref("");
 
 const commonBasePath = computed(() => {
-  const fileRegex = /([/\\][\w\s\-.@/\\]+[/\\][\w\s\-.@/\\]+\.[\w]+)/g;
+  const fileRegex =
+    /((?:[/\\]|(?=[\w][\w.\-@]*[/\\]))[\w\s\-.@/\\]+[/\\][\w\s\-.@]+\.[\w]{1,6})/g;
   const allPaths: string[] = [];
 
   // Extract all file paths from all logs
@@ -162,6 +261,21 @@ onMounted(() => {
 });
 
 const handleVirtualScrollerReady = () => {
+  // Measure char width and bootstrap height calculation now that the
+  // scroller element is in the DOM and has its computed styles applied.
+  const el = virtualScroller.value?.$el as HTMLElement | undefined;
+  if (el) {
+    charWidth.value = measureCharWidth(el);
+    containerWidth.value = el.clientWidth;
+    recalculateAllHeights();
+
+    resizeObserver = new ResizeObserver(([entry]) => {
+      containerWidth.value = entry.contentRect.width;
+      // charsPerLine watcher fires recalculateAllHeights automatically.
+    });
+    resizeObserver.observe(el);
+  }
+
   if (savedPosition.value !== undefined) {
     const { topIndex, offset } = savedPosition.value;
     virtualScroller.value?.scrollToIndex(topIndex, offset);
