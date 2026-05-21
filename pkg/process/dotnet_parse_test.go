@@ -269,12 +269,9 @@ func TestReadOutput_EmptyLineFlushesBuffer(t *testing.T) {
 	}
 }
 
-func TestReadOutput_StreamMarkerLinesNotLogStart(t *testing.T) {
-	// "STDERR" and "STDOUT" marker lines are not treated as log-start lines,
-	// so they don't flush the previous buffer — they get merged into it.
-	// A subsequent real log-start line flushes everything accumulated so far,
-	// producing one combined entry for the markers and a separate entry for
-	// the real log line.
+func TestReadOutput_NonIndentedLinesEachStartNewEntry(t *testing.T) {
+	// Non-indented lines that are not continuations each flush the previous
+	// buffer and start a new entry — they are never merged together.
 	ds := newTestService()
 	feedLines(ds, "stdout", []string{
 		"STDERR",
@@ -283,17 +280,18 @@ func TestReadOutput_StreamMarkerLinesNotLogStart(t *testing.T) {
 	})
 
 	logs := drainLogs(ds)
-	// Entry 0: the accumulated "STDERR\nSTDOUT" block (flushed when the info:
-	//           line is recognised as a new log-start).
-	// Entry 1: "info: real log line"
-	if len(logs) != 2 {
-		t.Fatalf("got %d entries, want 2", len(logs))
+	// Three separate non-indented lines → three separate entries.
+	if len(logs) != 3 {
+		t.Fatalf("got %d entries, want 3", len(logs))
 	}
 	if !strings.Contains(logs[0].Message, "STDERR") {
-		t.Errorf("entry 0 = %q, expected it to contain 'STDERR'", logs[0].Message)
+		t.Errorf("entry 0 = %q, expected 'STDERR'", logs[0].Message)
 	}
-	if !strings.Contains(logs[1].Message, "real log line") {
-		t.Errorf("entry 1 = %q, expected it to contain 'real log line'", logs[1].Message)
+	if !strings.Contains(logs[1].Message, "STDOUT") {
+		t.Errorf("entry 1 = %q, expected 'STDOUT'", logs[1].Message)
+	}
+	if !strings.Contains(logs[2].Message, "real log line") {
+		t.Errorf("entry 2 = %q, expected 'real log line'", logs[2].Message)
 	}
 }
 
