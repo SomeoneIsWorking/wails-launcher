@@ -326,12 +326,60 @@ func (ns *NpmService) spawnWithoutBuild() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// readOutput reads from pipe
+// readOutput reads from pipe and buffers multi-line log entries.
+// Indented lines are treated as continuations of the previous entry;
+// blank lines flush the buffer; everything else starts a new entry.
+// A 200 ms idle timer flushes the buffer when output goes quiet.
 func (ns *NpmService) readOutput(pipe io.ReadCloser, stream string) {
-	scanner := bufio.NewScanner(pipe)
-	for scanner.Scan() {
-		line := scanner.Text()
-		ns.processLine(line, stream)
+	lineChan := make(chan string)
+	go func() {
+		scanner := bufio.NewScanner(pipe)
+		for scanner.Scan() {
+			lineChan <- scanner.Text()
+		}
+		close(lineChan)
+	}()
+
+	var buffer strings.Builder
+
+	flushBuffer := func() {
+		if buffer.Len() > 0 {
+			ns.processLine(buffer.String(), stream)
+			buffer.Reset()
+		}
+	}
+
+	idleTimer := time.NewTimer(0)
+	if !idleTimer.Stop() {
+		<-idleTimer.C
+	}
+	defer idleTimer.Stop()
+
+	for {
+		select {
+		case line, ok := <-lineChan:
+			if !ok {
+				flushBuffer()
+				return
+			}
+			idleTimer.Stop()
+			if strings.TrimSpace(line) == "" {
+				flushBuffer()
+			} else if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+				if buffer.Len() > 0 {
+					buffer.WriteString("\n")
+				}
+				buffer.WriteString(line)
+			} else {
+				flushBuffer()
+				buffer.WriteString(line)
+			}
+			if buffer.Len() > 0 {
+				idleTimer.Reset(200 * time.Millisecond)
+			}
+		case <-idleTimer.C:
+			flushBuffer()
+		}
 	}
 }
 

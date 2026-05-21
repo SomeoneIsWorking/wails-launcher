@@ -308,50 +308,34 @@ func (ds *DotnetService) spawnWithoutBuild() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// readOutput reads from pipe and buffers multi-line log entries
+// readOutput reads from pipe and buffers multi-line log entries.
+// A line is a continuation of the current entry when it is indented, starts
+// with a stack-frame prefix ("at "), or is an exception-chain separator ("---").
+// Everything else starts a new entry (flush + reset).
+//
+// A 200 ms idle timer flushes the buffer when output goes quiet so that the
+// last entry of a startup burst (e.g. the "Now listening on:" line) is
+// emitted even before the next log line arrives.
 func (ds *DotnetService) readOutput(pipe io.ReadCloser, stream string) {
-	scanner := bufio.NewScanner(pipe)
+	lineChan := make(chan string)
+	go func() {
+		scanner := bufio.NewScanner(pipe)
+		for scanner.Scan() {
+			lineChan <- scanner.Text()
+		}
+		close(lineChan)
+	}()
+
 	var buffer strings.Builder
 
-	// Matches log levels (info:, warn:, error:, debug:, trace:, critical:, fail:)
-	// or compiler output (paths with warnings/errors)
-	// or build/restore output lines
-	isLogStart := func(line string) bool {
+	isContinuation := func(line string) bool {
 		if len(line) == 0 {
 			return false
 		}
-		// Skip lines that are just stream indicators
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "STDERR" || trimmed == "STDOUT" {
-			return false
+		if line[0] == ' ' || line[0] == '\t' {
+			return true
 		}
-		// Check if line starts with common log prefixes (not indented)
-		if line[0] != ' ' && line[0] != '\t' {
-			lower := strings.ToLower(line)
-			if strings.HasPrefix(lower, "info:") ||
-				strings.HasPrefix(lower, "warn:") ||
-				strings.HasPrefix(lower, "error:") ||
-				strings.HasPrefix(lower, "debug:") ||
-				strings.HasPrefix(lower, "trace:") ||
-				strings.HasPrefix(lower, "critical:") ||
-				strings.HasPrefix(lower, "fail:") {
-				return true
-			}
-			// Compiler warnings/errors (start with path)
-			if strings.Contains(line, "): warning ") || strings.Contains(line, "): error ") {
-				return true
-			}
-			// NuGet warnings/errors (path : warning/error format)
-			if strings.Contains(line, " : warning ") || strings.Contains(line, " : error ") {
-				return true
-			}
-			// Build/restore messages
-			if strings.HasPrefix(line, "Build ") || strings.HasPrefix(line, "Restore ") ||
-				strings.HasPrefix(line, "Determining ") || strings.HasPrefix(line, "Building...") {
-				return true
-			}
-		}
-		return false
+		return strings.HasPrefix(line, "at ") || strings.HasPrefix(line, "---")
 	}
 
 	flushBuffer := func() {
@@ -361,34 +345,38 @@ func (ds *DotnetService) readOutput(pipe io.ReadCloser, stream string) {
 		}
 	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
+	idleTimer := time.NewTimer(0)
+	if !idleTimer.Stop() {
+		<-idleTimer.C
+	}
+	defer idleTimer.Stop()
 
-		// Skip empty lines and flush buffer
-		if trimmed == "" {
+	for {
+		select {
+		case line, ok := <-lineChan:
+			if !ok {
+				flushBuffer()
+				return
+			}
+			idleTimer.Stop()
+			if strings.TrimSpace(line) == "" {
+				flushBuffer()
+			} else if isContinuation(line) {
+				if buffer.Len() > 0 {
+					buffer.WriteString("\n")
+				}
+				buffer.WriteString(line)
+			} else {
+				flushBuffer()
+				buffer.WriteString(line)
+			}
+			if buffer.Len() > 0 {
+				idleTimer.Reset(200 * time.Millisecond)
+			}
+		case <-idleTimer.C:
 			flushBuffer()
-			continue
-		}
-
-		// Check if this line starts a new log entry
-		if isLogStart(line) {
-			// Flush any buffered content first
-			flushBuffer()
-			// Start new buffer with this line
-			buffer.WriteString(line)
-		} else if buffer.Len() > 0 {
-			// This is a continuation line, append to buffer
-			buffer.WriteString("\n")
-			buffer.WriteString(line)
-		} else {
-			// Start new buffer with this line (instead of processing immediately)
-			buffer.WriteString(line)
 		}
 	}
-
-	// Flush any remaining buffered content
-	flushBuffer()
 }
 
 // processLine processes a single log entry (may be multi-line)
