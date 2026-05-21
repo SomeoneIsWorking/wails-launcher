@@ -8,7 +8,12 @@
       >
         <div class="px-4 py-2 bg-gray-200 font-semibold text-gray-800 flex items-center justify-between"
              @contextmenu.prevent="showGroupContextMenu($event, groupId)">
-          <span>{{ group.name }}</span>
+          <span>
+            {{ group.name }}
+            <span class="ml-1 font-normal text-xs text-gray-500">
+              {{ runningCount(group) }}/{{ totalCount(group) }}
+            </span>
+          </span>
           <button
             @click.stop="editGroup(groupId)"
             class="text-gray-500 hover:text-gray-700"
@@ -90,6 +95,7 @@ import { storeToRefs } from "pinia";
 import { useServicesStore } from "@/stores/services";
 import { useContextMenuStore } from "@/stores/contextMenu";
 import { ref } from "vue";
+import type { ClientGroupInfo } from "@/types/client";
 import {
   SettingsIcon,
   RefreshCwIcon,
@@ -122,12 +128,28 @@ function editGroup(id: string) {
   editingGroupId.value = id;
 }
 
+function runningCount(group: ClientGroupInfo): number {
+  const active = ["running", "initializing", "starting"];
+  return Object.values(group.services).filter((s) => active.includes(s.status)).length;
+}
+
+function totalCount(group: ClientGroupInfo): number {
+  return Object.keys(group.services).length;
+}
+
 function showGroupContextMenu(event: MouseEvent, groupId: string) {
   contextMenuStore.show(event, [
     {
-      label: "Launch Group",
+      label: "Run all",
       action: () => {
         store.startGroup(groupId);
+        contextMenuStore.hide();
+      },
+    },
+    {
+      label: "Run all without building",
+      action: () => {
+        store.startGroupWithoutBuild(groupId);
         contextMenuStore.hide();
       },
     },

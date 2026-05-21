@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { MAX_LOGS } from "@/constants";
 import type { ServiceConfig, ServiceInfo } from "@/types/service";
 import type { ClientServiceInfo, ClientLogEntry, ScrollPosition, ClientGroupInfo } from "@/types/client";
-import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StartServiceWithoutBuild, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, Browse } from '../../wailsjs/go/main/App.js'
+import { GetServices, GetGroups, AddGroup, UpdateGroup, AddServiceToGroup, UpdateServiceInGroup, ImportSLN, ImportProject, AddService, UpdateService, StartService, StartServiceWithoutBuild, StopService, ClearLogs, ReloadServices, DeleteService, StartGroup, StartGroupWithoutBuild, Browse } from '../../wailsjs/go/main/App.js'
 import { EventsOn } from '../../wailsjs/runtime/runtime.js'
 import { process } from 'wailsjs/go/models.js';
 
@@ -279,6 +279,10 @@ export const useServicesStore = defineStore("services", () => {
     await StartGroup(groupId);
   }
 
+  async function startGroupWithoutBuild(groupId: string) {
+    await StartGroupWithoutBuild(groupId);
+  }
+
   async function browse(title: string, filterName: string, pattern: string): Promise<string> {
     return await Browse(title, filterName, pattern);
   }
@@ -317,6 +321,7 @@ export const useServicesStore = defineStore("services", () => {
     reloadConfig,
     deleteService,
     startGroup,
+    startGroupWithoutBuild,
     browse,
     loadAll,
     importProject,
