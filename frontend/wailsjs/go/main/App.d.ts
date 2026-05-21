@@ -36,6 +36,8 @@ export function RestartService(arg1:string):Promise<void>;
 
 export function StartGroup(arg1:string):Promise<void>;
 
+export function StartGroupWithoutBuild(arg1:string):Promise<void>;
+
 export function StartService(arg1:string):Promise<void>;
 
 export function StartServiceWithoutBuild(arg1:string):Promise<void>;

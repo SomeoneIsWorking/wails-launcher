@@ -2,6 +2,7 @@ package process
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -252,6 +253,27 @@ func (ns *NpmService) spawn() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
+// bestStartScript reads package.json and returns the first available script
+// from a priority list, falling back to "dev" if none are found.
+func (ns *NpmService) bestStartScript() string {
+	data, err := os.ReadFile(filepath.Join(ns.path, "package.json"))
+	if err != nil {
+		return "dev"
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return "dev"
+	}
+	for _, script := range []string{"dev", "start"} {
+		if _, ok := pkg.Scripts[script]; ok {
+			return script
+		}
+	}
+	return "dev"
+}
+
 // spawnWithoutBuild spawns the npm process without building
 func (ns *NpmService) spawnWithoutBuild() (*exec.Cmd, error) {
 	npmPath, err := executablesearch.FindExecutable("npm")
@@ -280,7 +302,9 @@ func (ns *NpmService) spawnWithoutBuild() (*exec.Cmd, error) {
 		env = append(env, k+"="+v)
 	}
 
-	cmd, err := bridge.CreateCommand([]string{npmPath, "start"}, env, ns.path)
+	script := ns.bestStartScript()
+	ns.emitLog(Inf, fmt.Sprintf("Running without build using script: %s", script), "", "stdout")
+	cmd, err := bridge.CreateCommand([]string{npmPath, "run", script}, env, ns.path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge command: %v", err)
 	}

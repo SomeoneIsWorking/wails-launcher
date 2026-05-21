@@ -416,6 +416,18 @@ func (a *App) StartGroup(groupId string) {
 	}
 }
 
+// StartGroupWithoutBuild starts all services in a group without building
+func (a *App) StartGroupWithoutBuild(groupId string) {
+	groups := a.groups.GetGroups()
+	if group, exists := groups[groupId]; exists {
+		for serviceId := range group.Services {
+			go func(id string) {
+				a.StartServiceWithoutBuild(id)
+			}(serviceId)
+		}
+	}
+}
+
 // saveConfig saves the configuration
 func (a *App) saveConfig() {
 	a.config.Groups = a.groups.GetGroups()

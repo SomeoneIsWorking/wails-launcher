@@ -66,6 +66,10 @@ export function StartGroup(arg1) {
   return window['go']['main']['App']['StartGroup'](arg1);
 }
 
+export function StartGroupWithoutBuild(arg1) {
+  return window['go']['main']['App']['StartGroupWithoutBuild'](arg1);
+}
+
 export function StartService(arg1) {
   return window['go']['main']['App']['StartService'](arg1);
 }
