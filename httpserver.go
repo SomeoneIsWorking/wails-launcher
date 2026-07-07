@@ -26,6 +26,7 @@ func (a *App) startHTTPServer(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/services", a.handleListServices)
 	mux.HandleFunc("GET /api/services/{id}", a.handleGetService)
+	mux.HandleFunc("GET /api/services/{id}/logs", a.handleGetServiceLogs)
 	mux.HandleFunc("POST /api/services/{id}/start", a.handleStartService)
 	mux.HandleFunc("POST /api/services/{id}/stop", a.handleStopService)
 	mux.HandleFunc("POST /api/services/{id}/restart", a.handleRestartService)
@@ -90,10 +91,37 @@ func (a *App) handleGetService(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toStatusResponse(id, srv.GetInfo()))
 }
 
-// POST /api/services/{id}/start
+// GET /api/services/{id}/logs
+// Returns the captured log buffer for a service (omitted from the status
+// responses). Useful for debugging startup/port/TLS issues from the CLI.
+func (a *App) handleGetServiceLogs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	a.mu.RLock()
+	srv, exists := a.services[id]
+	a.mu.RUnlock()
+	if !exists {
+		writeError(w, http.StatusNotFound, "service not found")
+		return
+	}
+	info := srv.GetInfo()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":   id,
+		"name": info.Name,
+		"logs": info.Logs,
+	})
+}
+
+// POST /api/services/{id}/start[?no-build=true]
 func (a *App) handleStartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := a.StartService(id); err != nil {
+	var err error
+	if r.URL.Query().Get("no-build") == "true" {
+		err = a.StartServiceWithoutBuild(id)
+	} else {
+		err = a.StartService(id)
+	}
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -110,10 +138,20 @@ func (a *App) handleStopService(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
 }
 
-// POST /api/services/{id}/restart
+// POST /api/services/{id}/restart[?no-build=true]
 func (a *App) handleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := a.RestartService(id); err != nil {
+	if err := a.StopService(id); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var err error
+	if r.URL.Query().Get("no-build") == "true" {
+		err = a.StartServiceWithoutBuild(id)
+	} else {
+		err = a.StartService(id)
+	}
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
