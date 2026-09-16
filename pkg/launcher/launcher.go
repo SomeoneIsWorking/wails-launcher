@@ -1,4 +1,4 @@
-package main
+package launcher
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"wails-launcher/pkg/process"
 	"wails-launcher/pkg/service"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // LogLevel represents the log level
@@ -38,7 +37,17 @@ type GroupConfig = config.GroupConfig
 // ServiceInfo represents service information
 type ServiceInfo = service.ServiceInfo
 
-// App struct
+// Emitter receives a service event. The GUI shell forwards it to the window; a
+// headless host can ignore it or log it.
+type Emitter func(event string, serviceId string, data interface{})
+
+// FilePicker asks the user for a path. Only a shell with a window can answer, so a
+// headless host leaves it unset and Browse says so rather than hanging.
+type FilePicker func(title string, filterName string, pattern string) (string, error)
+
+// App holds the services and drives them. It knows nothing about how it is hosted:
+// the window and the file dialog arrive as callbacks, so the same App runs under the
+// Wails GUI and under the headless daemon.
 type App struct {
 	ctx        context.Context
 	services   map[string]*service.Service
@@ -46,19 +55,29 @@ type App struct {
 	config     *config.Config
 	mu         sync.RWMutex
 	httpServer *http.Server
+	emit       Emitter
+	pickFile   FilePicker
 }
 
-// EmitToFrontend emits an event to the frontend
+// EmitToFrontend emits a service event to whoever is hosting this App.
 func (a *App) EmitToFrontend(event string, serviceId string, data interface{}) {
-	runtime.EventsEmit(a.ctx, "serviceEvent", map[string]interface{}{
-		"type":      event,
-		"serviceId": serviceId,
-		"data":      data,
-	})
+	if a.emit == nil {
+		return
+	}
+	a.emit(event, serviceId, data)
 }
 
-// NewApp creates a new App application struct
+
+// NewApp creates a launcher with no window behind it: service events go nowhere and
+// Browse reports that there is no dialog. This is what the headless daemon uses.
 func NewApp() *App {
+	return NewAppWith(nil, nil)
+}
+
+// NewAppWith creates a launcher that reports its service events through emit and asks
+// for paths through pick. Either may be nil. The callbacks are read at call time, so a
+// shell may pass methods that only become usable once its window exists.
+func NewAppWith(emit Emitter, pick FilePicker) *App {
 	cfg, err := config.Load()
 	if err != nil {
 		// Handle error, maybe create empty config
@@ -69,20 +88,21 @@ func NewApp() *App {
 		services: make(map[string]*service.Service),
 		groups:   group.NewManager(cfg.Groups),
 		config:   cfg,
+		emit:     emit,
+		pickFile: pick,
 	}
 	app.loadServices()
 	return app
 }
 
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
-func (a *App) startup(ctx context.Context) {
+// Startup starts the control API. The context is kept so the host can cancel it.
+func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.startHTTPServer(ctx)
 }
 
-// shutdown is called when the app closes
-func (a *App) shutdown(ctx context.Context) {
+// Shutdown stops the control API.
+func (a *App) Shutdown(ctx context.Context) {
 	if a.httpServer != nil {
 		a.httpServer.Shutdown(ctx) //nolint:errcheck
 	}
@@ -367,20 +387,12 @@ func (a *App) GetLaunchProfiles(projectPath string) ([]string, error) {
 	return names, nil
 }
 
-// Browse opens a file dialog and returns the selected path
+// Browse opens a file dialog and returns the selected path.
 func (a *App) Browse(title string, filterName string, pattern string) (string, error) {
-	if a.ctx == nil {
-		return "", fmt.Errorf("app context not initialized")
+	if a.pickFile == nil {
+		return "", fmt.Errorf("no file dialog available: this launcher is running without a window")
 	}
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: title,
-		Filters: []runtime.FileFilter{
-			{
-				DisplayName: filterName,
-				Pattern:     pattern,
-			},
-		},
-	})
+	return a.pickFile(title, filterName, pattern)
 }
 
 // DeleteService deletes a service
