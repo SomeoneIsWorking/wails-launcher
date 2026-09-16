@@ -1,4 +1,4 @@
-package main
+package launcher
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"wails-launcher/pkg/process"
 )
 
-const httpListenAddr = "127.0.0.1:9901"
+// HTTPListenAddr is where the control API listens. Local only, on purpose.
+const HTTPListenAddr = "127.0.0.1:9901"
 
 // serviceStatusResponse is the JSON shape returned by the HTTP API.
 // It omits the full log buffer that ServiceInfo carries.
@@ -21,7 +22,7 @@ type serviceStatusResponse struct {
 }
 
 // startHTTPServer registers routes and starts listening in the background.
-// The server is shut down when ctx is cancelled (wails OnShutdown).
+// The server is shut down when ctx is cancelled.
 func (a *App) startHTTPServer(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/services", a.handleListServices)
@@ -31,7 +32,7 @@ func (a *App) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("POST /api/services/{id}/stop", a.handleStopService)
 	mux.HandleFunc("POST /api/services/{id}/restart", a.handleRestartService)
 
-	srv := &http.Server{Addr: httpListenAddr, Handler: mux}
+	srv := &http.Server{Addr: HTTPListenAddr, Handler: mux}
 	a.httpServer = srv
 
 	go srv.ListenAndServe() //nolint:errcheck

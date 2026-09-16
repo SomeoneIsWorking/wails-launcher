@@ -28,3 +28,4 @@ build/bin/
 # ...existing code...
 services.json
 frontend/tsconfig.tsbuildinfo
+bin/
