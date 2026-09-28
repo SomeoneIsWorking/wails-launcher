@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"wails-launcher/pkg/config"
 	"wails-launcher/pkg/process"
 )
 
@@ -14,11 +15,11 @@ const HTTPListenAddr = "127.0.0.1:9901"
 // serviceStatusResponse is the JSON shape returned by the HTTP API.
 // It omits the full log buffer that ServiceInfo carries.
 type serviceStatusResponse struct {
-	ID     string               `json:"id"`
-	Name   string               `json:"name"`
+	ID     string                `json:"id"`
+	Name   string                `json:"name"`
 	Status process.ServiceStatus `json:"status"`
-	URL    *string              `json:"url,omitempty"`
-	Type   string               `json:"type"`
+	URL    *string               `json:"url,omitempty"`
+	Type   string                `json:"type"`
 }
 
 // startHTTPServer registers routes and starts listening in the background.
@@ -31,6 +32,7 @@ func (a *App) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("POST /api/services/{id}/start", a.handleStartService)
 	mux.HandleFunc("POST /api/services/{id}/stop", a.handleStopService)
 	mux.HandleFunc("POST /api/services/{id}/restart", a.handleRestartService)
+	mux.HandleFunc("POST /api/services", a.handleAddService)
 
 	srv := &http.Server{Addr: HTTPListenAddr, Handler: mux}
 	a.httpServer = srv
@@ -157,4 +159,65 @@ func (a *App) handleRestartService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "starting"})
+}
+
+// addServiceRequest is the body of POST /api/services. Group is the group's
+// name; the service inherits that group's environment, as it would when added
+// from the UI.
+type addServiceRequest struct {
+	Group   string            `json:"group"`
+	Name    string            `json:"name"`
+	Path    string            `json:"path"`
+	Type    string            `json:"type"`
+	Profile string            `json:"profile"`
+	Env     config.ServiceEnv `json:"env"`
+}
+
+// POST /api/services
+// Adds a service to an existing group and saves the config. A service with the
+// same name already in any group is refused rather than duplicated.
+func (a *App) handleAddService(w http.ResponseWriter, r *http.Request) {
+	var req addServiceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	if req.Group == "" || req.Name == "" || req.Path == "" || req.Type == "" {
+		writeError(w, http.StatusBadRequest, "group, name, path and type are required")
+		return
+	}
+	if req.Env == nil {
+		req.Env = config.ServiceEnv{}
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for id, srv := range a.services {
+		if srv.GetInfo().Name == req.Name {
+			writeError(w, http.StatusConflict, "a service named "+req.Name+" already exists ("+id+")")
+			return
+		}
+	}
+	groupID := ""
+	for id, grp := range a.groups.GetGroups() {
+		if grp.Name == req.Group {
+			groupID = id
+			break
+		}
+	}
+	if groupID == "" {
+		writeError(w, http.StatusNotFound, "group not found: "+req.Group)
+		return
+	}
+
+	id := a.AddServiceToGroup(groupID, config.ServiceConfig{
+		Name: req.Name, Path: req.Path, Env: req.Env, Type: req.Type, Profile: req.Profile,
+	})
+	srv, exists := a.services[id]
+	if !exists {
+		writeError(w, http.StatusInternalServerError, "service was saved but not created")
+		return
+	}
+	writeJSON(w, http.StatusCreated, toStatusResponse(id, srv.GetInfo()))
 }

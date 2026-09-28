@@ -13,7 +13,6 @@ import (
 	"wails-launcher/pkg/group"
 	"wails-launcher/pkg/process"
 	"wails-launcher/pkg/service"
-
 )
 
 // LogLevel represents the log level
@@ -66,7 +65,6 @@ func (a *App) EmitToFrontend(event string, serviceId string, data interface{}) {
 	}
 	a.emit(event, serviceId, data)
 }
-
 
 // NewApp creates a launcher with no window behind it: service events go nowhere and
 // Browse reports that there is no dialog. This is what the headless daemon uses.
