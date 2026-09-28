@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"wails-launcher/pkg/config"
@@ -183,5 +184,41 @@ func TestHandlers_ContentTypeJSON(t *testing.T) {
 		if ct != "application/json" {
 			t.Errorf("%s %s: Content-Type = %q, want application/json", tc.method, tc.path, ct)
 		}
+	}
+}
+
+// ── POST /api/services ────────────────────────────────────────────────────
+// Only the refusals are exercised: a successful add saves to the real
+// services.json, which a test must not touch.
+
+func postAddService(a *App, body string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/services", a.handleAddService)
+	req := httptest.NewRequest(http.MethodPost, "/api/services", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestHandleAddService_MissingFields(t *testing.T) {
+	rec := postAddService(newTestApp(), `{"group":"Oasis","name":"X"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleAddService_UnknownGroup(t *testing.T) {
+	rec := postAddService(newTestApp(), `{"group":"Nope","name":"X","path":"/x","type":"dotnet"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestHandleAddService_DuplicateName(t *testing.T) {
+	a := newTestApp()
+	addFakeService(a, "svc1", config.ServiceConfig{Name: "Oasis.Api", Type: "dotnet"})
+	rec := postAddService(a, `{"group":"Oasis","name":"Oasis.Api","path":"/x","type":"dotnet"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rec.Code)
 	}
 }
