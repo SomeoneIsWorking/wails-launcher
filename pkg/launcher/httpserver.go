@@ -33,6 +33,8 @@ func (a *App) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("POST /api/services/{id}/stop", a.handleStopService)
 	mux.HandleFunc("POST /api/services/{id}/restart", a.handleRestartService)
 	mux.HandleFunc("POST /api/services", a.handleAddService)
+	mux.HandleFunc("GET /api/groups", a.handleListGroups)
+	mux.HandleFunc("PATCH /api/groups/{name}/env", a.handlePatchGroupEnv)
 
 	srv := &http.Server{Addr: HTTPListenAddr, Handler: mux}
 	a.httpServer = srv
@@ -220,4 +222,54 @@ func (a *App) handleAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toStatusResponse(id, srv.GetInfo()))
+}
+
+// GET /api/groups
+// Lists each group by name with its environment, so a caller can see which
+// database the stack is pointed at.
+func (a *App) handleListGroups(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := map[string]config.ServiceEnv{}
+	for _, grp := range a.groups.GetGroups() {
+		out[grp.Name] = grp.Env
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// PATCH /api/groups/{name}/env
+// Merges the given keys into a group's environment (an empty value removes the
+// key), saves the config and pushes the merged env to every service in the
+// group. Running services keep their old env until they are restarted.
+func (a *App) handlePatchGroupEnv(w http.ResponseWriter, r *http.Request) {
+	var patch map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	name := r.PathValue("name")
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for id, grp := range a.groups.GetGroups() {
+		if grp.Name != name {
+			continue
+		}
+		env := config.ServiceEnv{}
+		for k, v := range grp.Env {
+			env[k] = v
+		}
+		for k, v := range patch {
+			if v == "" {
+				delete(env, k)
+			} else {
+				env[k] = v
+			}
+		}
+		a.UpdateGroup(id, grp.Name, env)
+		writeJSON(w, http.StatusOK, env)
+		return
+	}
+	writeError(w, http.StatusNotFound, "group not found: "+name)
 }
