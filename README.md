@@ -34,3 +34,5 @@ the GUI binary.
 
 - `wails dev` — GUI with frontend hot reload.
 - `go build ./... && go vet ./... && go test ./...` — the core and both shells.
+
+Built with AI assistance (Claude and other LLMs).
